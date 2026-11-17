@@ -42,7 +42,7 @@ function Agents({ view }: { view: WorkspaceView }) {
         <Row key={agent.terminalId ?? `agent-${index}`} justify="between" align="center">
           <Text size="sm" tone={needsUser(agent) ? 'warning' : undefined}>
             {`${agentName(agent.agent)} ${agentVerb(agent.state)} `}
-            <RelativeTime at={agent.since} format="duration" />
+            <RelativeTime at={agent.since} format="duration" tone={needsUser(agent) ? 'warning' : undefined} />
           </Text>
           {agent.terminalId !== null ? (
             <IconButton
@@ -66,7 +66,7 @@ function Footer({ workstream }: { workstream: Workstream }) {
     <Text muted size="xs">
       {workstream.label}
       {workstream.ledgerUpdatedAt !== null ? ' · ledger updated ' : null}
-      {workstream.ledgerUpdatedAt !== null ? <RelativeTime at={workstream.ledgerUpdatedAt} format="short" /> : null}
+      {workstream.ledgerUpdatedAt !== null ? <RelativeTime at={workstream.ledgerUpdatedAt} format="short" muted /> : null}
       {`${unparsed}${notes}`}
     </Text>
   )

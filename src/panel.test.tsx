@@ -472,3 +472,55 @@ test('a refused document open leaves a visible notice instead of failing silentl
   assert.ok(panel.find({ text: 'Could not open this document.' }))
   assertClean(panel)
 })
+
+test('the relative times carry the style of the line around them', async () => {
+  const agents: AgentRow[] = [
+    { terminalId: 't1', agent: 'claude', state: 'blocked', since: NOW - 60_000 },
+    { terminalId: 't2', agent: 'claude', state: 'working', since: NOW - 60_000 },
+  ]
+  const live = workspaceView({ agents, needsYou: true, workstreams: [workstream({ ledgerUpdatedAt: NOW - 20_000 })] })
+  const { panel } = await mountWith(snapshot({ live: [live] }))
+  const times = panel.findAll({ type: 'RelativeTime' })
+  assert.equal(times.length, 3)
+  const byFormat = (format: string) => times.filter((element) => element.props.format === format)
+  const durations = byFormat('duration')
+  assert.equal(durations[0].props.tone, 'warning', 'the waiting agent time takes the warning tone')
+  assert.equal(durations[1].props.tone, undefined, 'a working agent time keeps the default tone')
+  assert.equal(byFormat('short')[0].props.muted, true, 'the footer time is muted like the footer')
+  assertClean(panel)
+})
+
+test('a failed first snapshot shows a notice that the next snapshot clears', async () => {
+  const host = mockHost({
+    requests: {
+      'progress.snapshot': () => {
+        throw new Error('worker down')
+      },
+    },
+  })
+  const panel = await mount(panelModule, { host })
+  view = panel
+  assert.ok(panel.find({ text: 'Could not read the work in progress.' }))
+  await panel.post('progress.changed', snapshot())
+  assert.equal(panel.find({ text: 'Could not read the work in progress.' }), null)
+  assert.ok(panel.find({ type: 'Badge', text: 'Tasks' }))
+  assertClean(panel)
+})
+
+test('a failed document open leaves a notice that the next snapshot clears', async () => {
+  const plan = '/work/hq/docs/superpowers/plans/p.md'
+  const first = snapshot({ live: [workspaceView({ workstreams: [workstream({ docs: { plan } })] })] })
+  const host = mockHost({
+    requests: {
+      'progress.snapshot': first,
+      'progress.openFile': () => ({ opened: false }),
+    },
+  })
+  const panel = await mount(panelModule, { host })
+  view = panel
+  await panel.press({ role: 'button', text: 'Plan' })
+  assert.ok(panel.find({ text: 'Could not open this document.' }))
+  await panel.post('progress.changed', first)
+  assert.equal(panel.find({ text: 'Could not open this document.' }), null)
+  assertClean(panel)
+})

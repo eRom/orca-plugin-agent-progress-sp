@@ -3,16 +3,16 @@
 import { EmptyState, Heading, Row, Spinner, Stack, Text, plugin, read, set, type PanelContext } from 'orca'
 import { AtRest, OtherWork, WorkTable } from './panel/others'
 import { Sheet } from './panel/sheet'
-import { noticeAtom, snapshotAtom, workChoiceAtom } from './panel/state'
+import { applySnapshot, noticeAtom, snapshotAtom, workChoiceAtom } from './panel/state'
 import type { Snapshot } from './protocol'
 
 export function setup(ctx: PanelContext): void {
-  ctx.subscriptions.push(plugin.on('progress.changed', (next) => set(snapshotAtom, next)))
+  ctx.subscriptions.push(plugin.on('progress.changed', applySnapshot))
   plugin
     .request('progress.snapshot')
     .then((first) => {
       // Un `progress.changed` arrivé pendant l'attente est plus récent que cette réponse.
-      if (read(snapshotAtom) === null) set(snapshotAtom, first)
+      if (read(snapshotAtom) === null) applySnapshot(first)
     })
     .catch(() => set(noticeAtom, 'Could not read the work in progress.'))
 }

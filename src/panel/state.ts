@@ -27,3 +27,9 @@ export const focusTerminal = (terminalId: string): Promise<void> =>
 
 export const openWorkspace = (workspaceId: string): Promise<void> =>
   act(async () => (await plugin.request('progress.openWorkspace', { workspaceId })).opened, 'Could not open this workspace.')
+
+/** Applique un instantané et efface l'échec précédent : le message ne doit pas survivre à des données fraîches. */
+export function applySnapshot(next: Snapshot): void {
+  set(noticeAtom, null)
+  set(snapshotAtom, next)
+}
