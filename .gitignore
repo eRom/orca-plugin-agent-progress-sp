@@ -5,3 +5,5 @@ docs/superpowers/
 node_modules/
 .claude/
 .superpowers/
+media/raw/
+media/build.sh

@@ -111,13 +111,6 @@ To try the plugin, install a frozen copy with `orca plugin install <folder>`. Do
 
 The icon, the cover and the screenshots of the plugin page live in `media/`. They are built from real renders of the panel (the scenarios of `src/panel.check.ts`, with demo data) laid on a plain backdrop; nothing is drawn by hand except the icon (`media/icon.svg`).
 
-```sh
-media/build.sh          # recompose from media/raw/*.png and media/icon.svg
-media/build.sh shoot    # also retake the raw shots with Orca (hides its window while shooting)
-```
-
-It needs `rsvg-convert` and ImageMagick 7 (`magick`).
-
 Agent Progress for Superpowers is a community plugin, not made or endorsed by Stably or by the Superpowers authors.
 
 ## License
