@@ -104,13 +104,18 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
   // Agents
   // ---------------------------------------------------------------------------------------------
 
-  /** Workspaces dont on suit les agents : ceux qui ont un chantier vivant, et le workspace actif. */
+  /**
+   * Workspaces dont on suit les agents : tous ceux d'un projet qui a un chantier vivant (l'agent d'un worktree
+   * tourne souvent dans le terminal du checkout principal, qui n'a pas de chantier à lui), et le workspace actif.
+   */
   function neededAgentWorkspaces(): Set<string> {
     const needed = new Set<string>()
+    const liveProjects = new Set<string>()
     for (const row of rows) {
       const result = projectResults.get(row.projectKey)?.[row.id]
-      if (result?.some((workstream) => workstream.live)) needed.add(row.id)
+      if (result?.some((workstream) => workstream.live)) liveProjects.add(row.projectKey)
     }
+    for (const row of rows) if (liveProjects.has(row.projectKey)) needed.add(row.id)
     if (focus && rows.some((row) => row.id === focus?.workspaceId)) needed.add(focus.workspaceId)
     return needed
   }

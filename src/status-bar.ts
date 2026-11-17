@@ -1,4 +1,4 @@
-// Texte de l'élément de barre d'état : le chantier vivant le plus récent du workspace actif.
+// Texte de l'élément de barre d'état : le chantier par défaut du projet du workspace actif.
 import type { Workstream } from './model/workstream'
 import type { Snapshot } from './protocol'
 
@@ -26,13 +26,14 @@ function textOf(workstream: Workstream): string {
 }
 
 export function statusBarFor(snapshot: Snapshot): StatusBarState {
-  const view = snapshot.live.find((candidate) => candidate.workspaceId === snapshot.focusedWorkspaceId)
+  const view = snapshot.live.find((candidate) => candidate.projectKey === snapshot.focusedProjectKey)
   if (!view || view.workstreams.length === 0) return { visible: false }
-  const latest = view.workstreams.reduce((best, item) => (item.lastMovedAt > best.lastMovedAt ? item : best))
+  // Le premier chantier du projet est le chantier par défaut (`byDefaultOrder`).
+  const first = view.workstreams[0]
   return {
     visible: true,
-    text: textOf(latest),
+    text: textOf(first),
     tone: view.needsYou ? 'warning' : 'neutral',
-    tooltip: `${view.name} · ${latest.label}`,
+    tooltip: `${view.name} · ${first.label}`,
   }
 }

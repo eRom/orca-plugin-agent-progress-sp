@@ -28,18 +28,18 @@ function workstream(stage: Stage, tasks: TaskRow[] = [], overrides: Partial<Work
   }
 }
 
+/** `options.focused` : la clé du projet actif (`'p1'` par défaut), `null` sans focus, ou une autre clé sans chantier vivant. */
 function snapshotOf(workstreams: Workstream[], options: { needsYou?: boolean; focused?: string | null } = {}): Snapshot {
-  const focused = options.focused === undefined ? 'w1' : options.focused
+  const focused = options.focused === undefined ? 'p1' : options.focused
   return {
-    focusedWorkspaceId: focused,
-    focused: focused === null ? null : { workspaceId: focused, name: 'Portal', branch: 'main' },
+    focusedWorkspaceId: focused === null ? null : 'w1',
+    focusedProjectKey: focused,
+    focused: focused === null ? null : { workspaceId: 'w1', name: 'Portal', branch: 'main' },
     live: [
       {
-        workspaceId: 'w1',
+        projectKey: 'p1',
         name: 'Portal',
-        branch: 'main',
-        root: '/r',
-        workstreams,
+        workstreams: workstreams.map((item) => ({ ...item, workspaceId: 'w1', branch: 'main' })),
         agents: [],
         needsYou: options.needsYou ?? false,
       },
@@ -84,12 +84,12 @@ test('adds the fix round when the current task is in correction', () => {
   assert.equal(bar.visible && bar.text, 'Tasks 4/7 · fix 2/5')
 })
 
-test('uses the most recently moved live workstream of the focused workspace', () => {
-  const older = workstream('spec', [], { label: 'older', lastMovedAt: 100 })
-  const newer = workstream('review', [], { label: 'newer', lastMovedAt: 900 })
-  const bar = statusBarFor(snapshotOf([older, newer]))
-  assert.equal(bar.visible && bar.text, 'Review')
-  assert.equal(bar.visible && bar.tooltip, 'Portal · newer')
+test('uses the first workstream of the focused project, the default one', () => {
+  const ledgerWork = workstream('tasks', seven([task('1', 'done')]), { label: 'with-ledger', lastMovedAt: 100, ledgerUpdatedAt: 100 })
+  const newerSpec = workstream('spec', [], { label: 'newer-spec', lastMovedAt: 900 })
+  const bar = statusBarFor(snapshotOf([ledgerWork, newerSpec]))
+  assert.equal(bar.visible && bar.text, 'Tasks 2/7')
+  assert.equal(bar.visible && bar.tooltip, 'Portal · with-ledger')
 })
 
 test('turns warning when an agent needs the user', () => {
@@ -97,10 +97,10 @@ test('turns warning when an agent needs the user', () => {
   assert.equal(bar.visible && bar.tone, 'warning')
 })
 
-test('is hidden without a focused workspace', () => {
+test('is hidden without a focused project', () => {
   assert.deepEqual(statusBarFor(snapshotOf([workstream('review')], { focused: null })), { visible: false })
 })
 
-test('is hidden when the focused workspace has no live workstream', () => {
-  assert.deepEqual(statusBarFor(snapshotOf([workstream('review')], { focused: 'w9' })), { visible: false })
+test('is hidden when the focused project has no live workstream', () => {
+  assert.deepEqual(statusBarFor(snapshotOf([workstream('review')], { focused: 'p9' })), { visible: false })
 })

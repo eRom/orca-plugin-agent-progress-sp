@@ -135,7 +135,7 @@ test('scans a local workspace and never touches the disk for an ssh row', async 
   await mounted.progress.tick()
 
   const snapshot = await snapshotOf(mounted)
-  assert.deepEqual(snapshot.live.map((view) => view.workspaceId), ['w1'])
+  assert.deepEqual(snapshot.live.flatMap((view) => view.workstreams.map((item) => item.workspaceId)), ['w1'])
   assert.deepEqual(scanned, [root])
   assert.equal(snapshot.live[0].workstreams[0].stage, 'tasks')
   assert.deepEqual(mounted.test.refusals, [])
@@ -190,7 +190,7 @@ test('survives a missing workspace.list and answers an empty snapshot', async ()
   await mounted.progress.tick()
 
   const snapshot = await snapshotOf(mounted)
-  assert.deepEqual(snapshot, { focusedWorkspaceId: null, focused: null, live: [], resting: [], anySuperpowers: false, localRoots: [] })
+  assert.deepEqual(snapshot, { focusedWorkspaceId: null, focusedProjectKey: null, focused: null, live: [], resting: [], anySuperpowers: false, localRoots: [] })
   assert.ok(mounted.test.logs.length > 0, 'the failure is logged')
   await mounted.test.deactivate()
 })
@@ -286,7 +286,7 @@ test('relists agents once per real state change and flags waiting agents', async
   assert.equal(mounted.host.callsOf('agents.list').length, afterTick + 1)
   const view = (await snapshotOf(mounted)).live[0]
   assert.equal(view.needsYou, true)
-  assert.deepEqual(view.agents, [{ terminalId: 't1', agent: 'claude', state: 'waiting', since: 5 }])
+  assert.deepEqual(view.agents, [{ terminalId: 't1', agent: 'claude', state: 'waiting', since: 5, workspaceId: 'w1', location: 'main' }])
   assert.equal(paramsOf(lastOf(statusUpdates(mounted.host))).tone, 'warning')
   assert.deepEqual(mounted.test.refusals, [])
   await mounted.test.deactivate()
@@ -548,14 +548,15 @@ test('a worktree dropping out of workspace.list does not turn its ledger into a 
   const host = makeHost(fixture)
   const mounted = await mountProgress(host)
   await mounted.progress.tick()
-  assert.equal((await snapshotOf(mounted)).live.find((view) => view.workspaceId === 'w2')?.workstreams[0].stage, 'tasks')
+  const workstreamOf = async (workspaceId: string) =>
+    (await snapshotOf(mounted)).live.flatMap((view) => view.workstreams).find((item) => item.workspaceId === workspaceId)
+  assert.equal((await workstreamOf('w2'))?.stage, 'tasks')
 
   // Le worktree sort de la liste (relue au prochain tour grâce à listDue) : son ledger n'est pas « disparu ».
   fixture.rows = [row('w1', main)]
   await mounted.test.emit('workspace.changed', { context: context('w1') })
   await mounted.progress.tick()
-  const view = (await snapshotOf(mounted)).live.find((candidate) => candidate.workspaceId === 'w1')
-  assert.notEqual(view?.workstreams[0]?.stage, 'done')
+  assert.notEqual((await workstreamOf('w1'))?.stage, 'done')
   const stored = host.data().storage[MEMORY_KEY] as Record<string, { goneAt?: number }>
   assert.ok(Object.values(stored).every((entry) => entry.goneAt === undefined))
   await mounted.test.deactivate()
@@ -570,7 +571,86 @@ test('labels a main checkout with its project name in the snapshot', async () =>
 
   const snapshot = await snapshotOf(mounted)
   assert.equal(snapshot.live[0].name, 'acme-api')
-  assert.equal(snapshot.live[0].branch, 'main')
+  assert.equal(snapshot.live[0].workstreams[0].branch, 'main')
   assert.equal(snapshot.focused?.name, 'acme-api')
+  await mounted.test.deactivate()
+})
+
+// ---------------------------------------------------------------------------------------------
+// Fiche par projet
+// ---------------------------------------------------------------------------------------------
+
+/** Date locale du jour, `YYYY-MM-DD` : un spec ainsi daté est vivant. */
+function localToday(): string {
+  const date = new Date()
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+test('shows the work of a worktree on its project, with the agent whose terminal is in the main checkout', async () => {
+  const main = await tempRoot()
+  const worktree = await tempRoot()
+  await put(main, `docs/superpowers/specs/${localToday()}-export-pdf-design.md`, '# Export PDF\n')
+  await seedWorkspace(worktree)
+  const fixture: Fixture = {
+    rows: [row('w-main', main, { branch: 'main' }), row('w-wt', worktree, { branch: 'worktree-login' })],
+    context: context('w-main'),
+    agents: { 'w-main': [{ terminalId: 't1', title: null, agent: 'claude', state: 'waiting', stateStartedAt: 5 }] },
+  }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+
+  const snapshot = await snapshotOf(mounted)
+  assert.equal(snapshot.focusedProjectKey, 'p1')
+  assert.equal(snapshot.live.length, 1)
+  const [view] = snapshot.live
+  assert.equal(view.workstreams[0].stage, 'tasks')
+  assert.equal(view.workstreams[0].workspaceId, 'w-wt')
+  assert.equal(view.workstreams[0].branch, 'worktree-login')
+  assert.ok(view.workstreams.some((item) => item.stage === 'spec' && item.workspaceId === 'w-main'))
+  assert.deepEqual(view.agents, [{ terminalId: 't1', agent: 'claude', state: 'waiting', since: 5, workspaceId: 'w-main', location: 'main' }])
+  assert.deepEqual(paramsOf(lastOf(statusUpdates(mounted.host))), { id: 'progress', visible: true, text: 'Tasks 2/3', tone: 'warning', tooltip: 'P · p' })
+  assert.deepEqual(mounted.test.refusals, [])
+  await mounted.test.deactivate()
+})
+
+test('follows a state change of an agent in a main checkout that has no live work of its own', async () => {
+  const main = await tempRoot()
+  const worktree = await tempRoot()
+  const other = await tempRoot()
+  await seedWorkspace(worktree)
+  await seedWorkspace(other)
+  const fixture: Fixture = {
+    rows: [row('w-main', main), row('w-wt', worktree, { branch: 'worktree-login' }), row('w-other', other, { projectId: 'p2' })],
+    context: context('w-other'),
+    agents: { 'w-main': [] },
+  }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+
+  assert.ok(mounted.host.callsOf('agents.list').map(paramsOf).some((params) => params.workspaceId === 'w-main'))
+  const projectView = async () => (await snapshotOf(mounted)).live.find((view) => view.projectKey === 'p1')
+  assert.equal((await projectView())?.needsYou, false)
+
+  fixture.agents['w-main'] = [{ terminalId: 't1', title: null, agent: 'claude', state: 'waiting', stateStartedAt: 5 }]
+  await mounted.test.emit('agent.status.changed', { workspaceId: 'native-id', workspaceListId: 'w-main', paneKey: 'pane-9', terminalId: 't1', state: 'waiting' as const, receivedAt: 1 })
+
+  const view = await projectView()
+  assert.equal(view?.needsYou, true)
+  assert.equal(view?.agents[0].location, 'main')
+  assert.deepEqual(mounted.test.refusals, [])
+  await mounted.test.deactivate()
+})
+
+test('a workspace without a project id is its own project', async () => {
+  const root = await tempRoot()
+  await seedWorkspace(root)
+  const fixture: Fixture = { rows: [row('f1', root, { projectId: null, kind: 'folder', branch: null })], context: context('f1'), agents: {} }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+
+  const snapshot = await snapshotOf(mounted)
+  assert.equal(snapshot.focusedProjectKey, 'f1')
+  assert.equal(snapshot.live[0].projectKey, 'f1')
+  assert.equal(paramsOf(lastOf(statusUpdates(mounted.host))).text, 'Tasks 2/3')
   await mounted.test.deactivate()
 })

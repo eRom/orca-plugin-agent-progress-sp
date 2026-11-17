@@ -9,16 +9,20 @@ export type AgentRow = {
   since: number
 }
 
-/** Un workspace local qui a au moins un chantier vivant. */
-export type WorkspaceView = {
-  workspaceId: string
+/** Un agent du projet, avec le workspace de son terminal ; `location` = branche de ce workspace, sinon son nom. */
+export type ProjectAgent = AgentRow & { workspaceId: string; location: string }
+
+/** Un chantier vivant, avec le workspace qui le porte. */
+export type ProjectWorkstream = Workstream & { workspaceId: string; branch: string | null }
+
+/** Un projet (checkout principal et worktrees confondus) qui a au moins un chantier vivant. */
+export type ProjectView = {
+  projectKey: string
   name: string
-  branch: string | null
-  root: string
-  /** Chantiers vivants, le plus récemment modifié d'abord. */
-  workstreams: Workstream[]
-  /** Agents du workspace, ceux qui attendent l'utilisateur d'abord. */
-  agents: AgentRow[]
+  /** Chantiers vivants de tous ses workspaces, le chantier par défaut d'abord (`byDefaultOrder`). */
+  workstreams: ProjectWorkstream[]
+  /** Agents de tous ses workspaces, ceux qui attendent l'utilisateur d'abord. */
+  agents: ProjectAgent[]
   /** Un agent est `blocked` ou `waiting`. */
   needsYou: boolean
 }
@@ -28,9 +32,11 @@ export type RestingView = { workspaceId: string; name: string; lastDoc: string; 
 
 export type Snapshot = {
   focusedWorkspaceId: string | null
+  /** Projet du workspace actif s'il est listé, sinon null. */
+  focusedProjectKey: string | null
   /** Pour l'en-tête du panneau, même sans chantier vivant. */
   focused: { workspaceId: string; name: string; branch: string | null } | null
-  live: WorkspaceView[]
+  live: ProjectView[]
   resting: RestingView[]
   /** Au moins un workspace a des fichiers Superpowers. */
   anySuperpowers: boolean
