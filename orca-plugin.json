@@ -6,6 +6,33 @@
   "description": "Requires Superpowers. Shows where each Superpowers plan stands, read from its spec, plan and ledger: the current workspace's tasks and agent, the other work in progress, and the stage in the status bar.",
   "author": { "name": "Romain Ecarnot", "url": "https://github.com/eRom" },
   "repository": "https://github.com/eRom/orca-plugin-agent-progress-sp",
+  "homepage": "https://github.com/eRom/orca-plugin-agent-progress-sp",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "cover": {
+    "path": "media/cover.png",
+    "alt": "The Agent Progress panel in Orca: a stage strip, a progress bar and the task list of a plan, beside a table of the other workspaces with live work."
+  },
+  "screenshots": [
+    {
+      "path": "media/screenshot-dark.png",
+      "alt": "The dark Agent Progress panel: two plans, one at the Tasks stage with a task in a fix round, one at the Review stage with every task done.",
+      "caption": "Every plan, stage by stage",
+      "theme": "dark"
+    },
+    {
+      "path": "media/screenshot-light.png",
+      "alt": "The same two plans in Orca's light theme.",
+      "caption": "Follows Orca's theme",
+      "theme": "light"
+    },
+    {
+      "path": "media/screenshot-needs-you.png",
+      "alt": "A panel with an agent that needs you, in amber, next to a table of other workspaces where one agent is waiting for you and another is working.",
+      "caption": "See at a glance who needs you",
+      "theme": "dark"
+    }
+  ],
   "engines": {
     "orca": ">=1.4.259"
   },
