@@ -2,7 +2,8 @@
 import type { Workstream } from './model/workstream'
 import type { AgentRow, ProjectAgent, ProjectView, ProjectWorkstream, RestingView, Snapshot } from './protocol'
 
-export type WorkspaceMeta = { workspaceId: string; projectKey: string; name: string; branch: string | null; root: string }
+/** `name` est le libellé du projet (nom de la fiche) ; `workspaceName` le nom Orca propre du workspace (repli de localisation d'un agent). */
+export type WorkspaceMeta = { workspaceId: string; projectKey: string; name: string; workspaceName: string; branch: string | null; root: string }
 /** Le workspace actif, tel que `workspace.readContext` ou `workspace.changed` le rend. */
 export type FocusInfo = { workspaceId: string; displayName: string; branch: string | null }
 
@@ -29,10 +30,18 @@ export function byDefaultOrder(a: Workstream, b: Workstream): number {
   return a.key.localeCompare(b.key)
 }
 
-/** Une même clé peut exister dans plusieurs workspaces : celle au ledger ouvert gagne, puis la plus récente. */
+/**
+ * Une même clé peut exister dans plusieurs workspaces : celle au ledger ouvert gagne ; si les deux en ont un,
+ * le ledger écrit le plus récemment (leur `lastMovedAt` est souvent égal) ; sinon la plus récente.
+ */
 const beats = (candidate: Workstream, current: Workstream): boolean => {
-  const candidateHasLedger = candidate.ledgerUpdatedAt !== null
-  if (candidateHasLedger !== (current.ledgerUpdatedAt !== null)) return candidateHasLedger
+  const candidateLedger = candidate.ledgerUpdatedAt
+  const currentLedger = current.ledgerUpdatedAt
+  if (candidateLedger !== null && currentLedger !== null) {
+    if (candidateLedger !== currentLedger) return candidateLedger > currentLedger
+  } else if (candidateLedger !== null || currentLedger !== null) {
+    return candidateLedger !== null
+  }
   return candidate.lastMovedAt > current.lastMovedAt
 }
 
@@ -68,7 +77,7 @@ export function assembleSnapshot(input: {
     }
     if (byKey.size === 0) continue
     const agents: ProjectAgent[] = metas.flatMap((meta) =>
-      (input.agents[meta.workspaceId] ?? []).map((agent) => ({ ...agent, workspaceId: meta.workspaceId, location: meta.branch ?? meta.name })),
+      (input.agents[meta.workspaceId] ?? []).map((agent) => ({ ...agent, workspaceId: meta.workspaceId, location: meta.branch ?? meta.workspaceName })),
     )
     live.push({
       projectKey,

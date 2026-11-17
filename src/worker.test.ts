@@ -641,6 +641,28 @@ test('follows a state change of an agent in a main checkout that has no live wor
   await mounted.test.deactivate()
 })
 
+test('an agent of a workspace without a branch is located by its own Orca name, not by the project label', async () => {
+  const main = await tempRoot()
+  const detached = await tempRoot()
+  await seedWorkspace(main)
+  const fixture: Fixture = {
+    rows: [
+      row('w-main', main, { name: 'main', project: 'acme-api', branch: 'main' }),
+      row('w-detached', detached, { name: 'detached-wt', project: 'acme-api', branch: null }),
+    ],
+    context: context('w-main'),
+    agents: { 'w-detached': [{ terminalId: 't1', title: null, agent: 'claude', state: 'working', stateStartedAt: 5 }] },
+  }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+
+  const snapshot = await snapshotOf(mounted)
+  const [view] = snapshot.live
+  assert.equal(view.name, 'acme-api')
+  assert.equal(view.agents[0].location, 'detached-wt')
+  await mounted.test.deactivate()
+})
+
 test('a workspace without a project id is its own project', async () => {
   const root = await tempRoot()
   await seedWorkspace(root)

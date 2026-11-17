@@ -5,7 +5,7 @@ import type { AgentRow } from './protocol'
 import { assembleSnapshot, type WorkspaceMeta } from './snapshot'
 
 function meta(workspaceId: string, projectKey = 'p1', name = workspaceId, branch: string | null = 'main'): WorkspaceMeta {
-  return { workspaceId, projectKey, name, branch, root: `/r/${workspaceId}` }
+  return { workspaceId, projectKey, name, workspaceName: name, branch, root: `/r/${workspaceId}` }
 }
 
 function workstream(label: string, lastMovedAt: number, live: boolean, ledgerUpdatedAt: number | null = null): Workstream {
@@ -232,11 +232,28 @@ test('keeps one workstream per key in a project, the one with a ledger first', (
 test('an agent of a workspace without a branch is located by the workspace name', () => {
   const snapshot = assembleSnapshot({
     focus: null,
-    workspaces: [meta('f1', 'p1', 'scratch-folder', null)],
+    // `name` est le libellé du projet, `workspaceName` le nom Orca propre du workspace : seul le second localise l'agent.
+    workspaces: [{ ...meta('f1', 'p1', 'acme-api', null), workspaceName: 'scratch-folder' }],
     workstreams: { f1: [workstream('x', 1, true)] },
     agents: { f1: [agent('working', 't1')] },
   })
   assert.equal(snapshot.live[0].agents[0].location, 'scratch-folder')
+  assert.equal(snapshot.live[0].name, 'acme-api')
+})
+
+test('between two copies that both carry a ledger, the most recently written ledger wins even on equal lastMovedAt', () => {
+  const key = 'p1:plan-x'
+  const snapshot = assembleSnapshot({
+    focus: null,
+    workspaces: [meta('wt-a', 'p1'), meta('wt-b', 'p1')],
+    workstreams: {
+      'wt-a': [{ ...workstream('plan', 5000, true, 1000), key }],
+      'wt-b': [{ ...workstream('plan', 5000, true, 3000), key }],
+    },
+    agents: {},
+  })
+  assert.equal(snapshot.live[0].workstreams.length, 1)
+  assert.equal(snapshot.live[0].workstreams[0].workspaceId, 'wt-b')
 })
 
 test('gives the project of the focused workspace, even when that workspace has no live work of its own', () => {

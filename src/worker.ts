@@ -31,7 +31,7 @@ export type ProgressDeps = { scanner?: Scanner; now?: () => number; schedule?: S
 export type ProgressWorker = { tick(): Promise<void>; stop(): void }
 
 /** Ce que le worker garde d'une ligne de `workspace.list` : locale, avec un chemin. */
-type ListedWorkspace = { id: string; name: string; projectKey: string; path: string; branch: string | null }
+type ListedWorkspace = { id: string; name: string; workspaceName: string; projectKey: string; path: string; branch: string | null }
 
 const realSchedule: Schedule = (fn, ms) => {
   const handle = setTimeout(fn, ms)
@@ -79,6 +79,7 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
       workspaceId: row.id,
       projectKey: row.projectKey,
       name: row.name,
+      workspaceName: row.workspaceName,
       branch: row.branch,
       root: row.path,
     }))
@@ -158,6 +159,7 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
         .map((workspace) => ({
           id: workspace.id,
           name: labelOf(workspace),
+          workspaceName: workspace.name,
           projectKey: workspace.projectId ?? workspace.id,
           path: workspace.path,
           branch: workspace.branch,
