@@ -14,7 +14,7 @@ import type { AgentRow, Snapshot } from './protocol'
 import { createScanner } from './scan'
 import { assembleSnapshot, type FocusInfo, type WorkspaceMeta } from './snapshot'
 import { statusBarFor } from './status-bar'
-import { parseMemory, resolveOpenTarget } from './worker-helpers'
+import { labelOf, parseMemory, resolveOpenTarget } from './worker-helpers'
 
 export const TICK_MS = 3000
 /** `workspace.list` est relu au premier tour, puis tous les 9 tours (27 s : un nouveau workspace apparaît en moins de 30 s). */
@@ -152,7 +152,7 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
         .filter((workspace) => (workspace.hostId === null || workspace.hostId === 'local') && workspace.path.trim() !== '')
         .map((workspace) => ({
           id: workspace.id,
-          name: workspace.name,
+          name: labelOf(workspace),
           projectKey: workspace.projectId ?? workspace.id,
           path: workspace.path,
           branch: workspace.branch,

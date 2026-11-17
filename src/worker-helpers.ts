@@ -59,3 +59,9 @@ export function parseMemory(value: unknown): LedgerMemory {
   }
   return memory
 }
+
+/** Libellé d'un workspace : le projet quand la ligne en porte un (un checkout principal s'appelle comme sa branche), sinon le nom. */
+export function labelOf(row: { name: string; project?: string | null }): string {
+  const project = row.project?.trim()
+  return project ? project : row.name
+}

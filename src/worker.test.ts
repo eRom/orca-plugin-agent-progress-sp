@@ -150,7 +150,7 @@ test('shows the stage in the status bar for the focused workspace', async () => 
   await mounted.progress.tick()
 
   const update = paramsOf(lastOf(statusUpdates(mounted.host)))
-  assert.deepEqual(update, { id: 'progress', visible: true, text: 'Tasks 2/3', tone: 'neutral', tooltip: 'Name w1 · p' })
+  assert.deepEqual(update, { id: 'progress', visible: true, text: 'Tasks 2/3', tone: 'neutral', tooltip: 'P · p' })
   assert.deepEqual(mounted.test.refusals, [])
   await mounted.test.deactivate()
 })
@@ -264,7 +264,7 @@ test('follows the focus from workspace.changed without waiting for a tick', asyn
   const post = lastOf(mounted.test.posts)
   assert.equal(post.event, 'progress.changed')
   assert.equal((post.payload as Snapshot).focusedWorkspaceId, 'w2')
-  assert.equal(paramsOf(lastOf(statusUpdates(mounted.host))).tooltip, 'Name w2 · p')
+  assert.equal(paramsOf(lastOf(statusUpdates(mounted.host))).tooltip, 'P · p')
   assert.deepEqual(mounted.test.refusals, [])
   await mounted.test.deactivate()
 })
@@ -558,5 +558,19 @@ test('a worktree dropping out of workspace.list does not turn its ledger into a 
   assert.notEqual(view?.workstreams[0]?.stage, 'done')
   const stored = host.data().storage[MEMORY_KEY] as Record<string, { goneAt?: number }>
   assert.ok(Object.values(stored).every((entry) => entry.goneAt === undefined))
+  await mounted.test.deactivate()
+})
+
+test('labels a main checkout with its project name in the snapshot', async () => {
+  const root = await tempRoot()
+  await seedWorkspace(root)
+  const fixture: Fixture = { rows: [row('w1', root, { name: 'main', project: 'EROM-HQ', branch: 'main' })], context: context('w1'), agents: {} }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+
+  const snapshot = await snapshotOf(mounted)
+  assert.equal(snapshot.live[0].name, 'EROM-HQ')
+  assert.equal(snapshot.live[0].branch, 'main')
+  assert.equal(snapshot.focused?.name, 'EROM-HQ')
   await mounted.test.deactivate()
 })

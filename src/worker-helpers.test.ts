@@ -1,6 +1,6 @@
 // Joue la lecture de la mémoire stockée : une valeur mal formée est écartée, jamais propagée.
 import { assert, test } from 'orca/testing'
-import { parseMemory } from './worker-helpers'
+import { labelOf, parseMemory } from './worker-helpers'
 
 const valid = { projectKey: 'p1', total: 3, done: 2, lastSeenAt: 1000 }
 
@@ -36,4 +36,12 @@ test('parseMemory drops an entry with a non-finite counter, date or a malformed 
 
 test('parseMemory answers an empty memory for anything that is not a plain object', () => {
   for (const value of [null, undefined, 3, 'x', [valid]]) assert.deepEqual(parseMemory(value), {})
+})
+
+test('labelOf shows the project for a checkout named after its branch, else the name', () => {
+  assert.equal(labelOf({ name: 'main', project: 'EROM-HQ' }), 'EROM-HQ')
+  assert.equal(labelOf({ name: 'feat/v1', project: 'agent-progress-sp' }), 'agent-progress-sp')
+  assert.equal(labelOf({ name: 'main', project: '  ' }), 'main')
+  assert.equal(labelOf({ name: 'main', project: null }), 'main')
+  assert.equal(labelOf({ name: 'EROM-HQ', project: 'EROM-HQ' }), 'EROM-HQ')
 })
