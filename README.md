@@ -4,6 +4,16 @@
 
 It reads the files Superpowers leaves in your workspaces (spec, plan, and the subagent-driven-development ledger) and turns them into one card per piece of work: the stage, the tasks, the agent running there, and whether something is waiting for you. A status bar item follows the active workspace.
 
+## Install
+
+From the command line:
+
+```sh
+orca plugin install eRom/orca-plugin-agent-progress-sp
+```
+
+Orca shows the access the plugin asks for (see [Access requested, and why](#access-requested-and-why)) and enables it once you approve. The **Agent Progress** panel then appears in the right sidebar, and the status bar item appears when the active workspace has live work.
+
 ## What it shows
 
 - **The card of the current workspace**: a stage strip, the task list with its state, the documents (spec, plan, ledger) as buttons that open in an Orca tab, and the agent working there, with a button that brings its terminal to the front.
@@ -75,13 +85,41 @@ The plugin writes nothing in your workspaces and adds nothing to your agents' co
 - **The status bar item toggles the right sidebar.** No Orca plugin can open its own panel from the status bar, so a click opens or closes the right sidebar, where the Agent Progress panel lives.
 - The ledger and spec formats live in the text of the Superpowers skills and can change. This plugin was tested against Superpowers v7.0.2.
 
+## Uninstall
+
+```sh
+orca plugin uninstall <plugin-key>
+```
+
+The key is the one shown by `orca plugin list`. Uninstalling removes the plugin's files and its approval. The plugin never wrote anything in your workspaces, so there is nothing else to clean up.
+
 ## Development
 
-```
+```sh
 orca plugin test . --json          # tests
 bunx tsc -p .                      # type check
 orca plugin validate . --json      # manifest
+orca plugin check . --json         # panel scenarios (src/panel.check.ts)
 bun scripts/audit-ledgers.ts <root>...
 ```
 
 The audit script reads every `.superpowers/sdd/**/progress.md` under each root (or the top-level `*.md` files of a corpus folder) and prints, per ledger, `done`, an independent count of `complete` task numbers, and the number of task lines not understood. It exits with 1 if the parser and the independent count disagree.
+
+To try the plugin, install a frozen copy with `orca plugin install <folder>`. Do not `orca plugin dev load` a folder whose dot-folders change (`.superpowers/`, `.codegraph/`): Orca ties the approval to the whole folder, and any change disables the plugin until you approve it again.
+
+### Listing media
+
+The icon, the cover and the screenshots of the plugin page live in `media/`. They are built from real renders of the panel (the scenarios of `src/panel.check.ts`, with demo data) laid on a plain backdrop; nothing is drawn by hand except the icon (`media/icon.svg`).
+
+```sh
+media/build.sh          # recompose from media/raw/*.png and media/icon.svg
+media/build.sh shoot    # also retake the raw shots with Orca (hides its window while shooting)
+```
+
+It needs `rsvg-convert` and ImageMagick 7 (`magick`).
+
+Agent Progress for Superpowers is a community plugin, not made or endorsed by Stably or by the Superpowers authors.
+
+## License
+
+[MIT](LICENSE)
