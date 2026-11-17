@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 2,
+  "id": "agent-progress-sp",
+  "name": "Agent Progress for Superpowers",
+  "version": "0.1.0",
+  "description": "Requires Superpowers. Shows where each Superpowers plan stands, read from its spec, plan and ledger: the current workspace's tasks and agent, the other work in progress, and the stage in the status bar.",
+  "author": { "name": "Romain Ecarnot", "url": "https://github.com/eRom" },
+  "repository": "https://github.com/eRom/orca-plugin-agent-progress-sp",
+  "engines": {
+    "orca": ">=1.4.246"
+  },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "panels": [
+      {
+        "id": "agent-progress-sp",
+        "title": "Agent Progress for Superpowers",
+        "icon": "blocks",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "storage:own"
+    }
+  ]
+}
