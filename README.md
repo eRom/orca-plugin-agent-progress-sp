@@ -1,5 +1,7 @@
 # Agent Progress for Superpowers
 
+![](cover.png)
+
 **This plugin requires [Superpowers](https://github.com/obra/superpowers).** It shows where each Superpowers plan stands, and it has nothing to show in a workspace that has no Superpowers files. It requires Orca 1.4.259 or later and was tested on Orca 1.4.261 with Superpowers v7.0.2.
 
 It reads the files Superpowers leaves in your workspaces (spec, plan, and the subagent-driven-development ledger) and turns them into one card per piece of work: the stage, the tasks, the agent running there, and whether something is waiting for you. A status bar item follows the active workspace.
