@@ -13,6 +13,7 @@
   "pluginApi": 1,
   "main": "src/worker.ts",
   "contributes": {
+    "panels": [{ "id": "progress", "title": "Agent Progress", "icon": "layers", "entry": "src/panel.tsx", "ui": "components" }],
     "events": [{ "on": "workspace.changed" }, { "on": "agent.status.changed" }],
     "statusBarItems": [{ "id": "progress", "icon": "layers", "command": "progress.toggle" }],
     "commands": [{ "id": "progress.toggle", "title": "Agent Progress: Toggle the sidebar" }]
