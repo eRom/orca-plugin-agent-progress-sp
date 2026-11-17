@@ -38,7 +38,7 @@ export function taskStatus(task: TaskRow): string {
     case 'in-progress':
       return 'In progress'
     default:
-      return '–'
+      return '·'
   }
 }
 

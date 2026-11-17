@@ -11,16 +11,16 @@ const results = { 'workspace.list': { workspaces: [], truncated: false } }
 
 function workstream(overrides: Partial<Workstream> = {}): Workstream {
   return {
-    key: 'erom-hq:bilingual',
-    label: 'portail-cca-bilingue',
+    key: 'acme-api:billing',
+    label: 'billing-v2',
     stage: 'tasks',
     hasIntent: true,
     skippedStages: [],
     docs: {
-      intent: '/work/erom-hq/docs/superpowers/intents/i.md',
-      spec: '/work/erom-hq/docs/superpowers/specs/s.md',
-      plan: '/work/erom-hq/docs/superpowers/plans/p.md',
-      ledger: '/work/erom-hq/.superpowers/sdd/portail/progress.md',
+      intent: '/work/acme-api/docs/superpowers/intents/i.md',
+      spec: '/work/acme-api/docs/superpowers/specs/s.md',
+      plan: '/work/acme-api/docs/superpowers/plans/p.md',
+      ledger: '/work/acme-api/.superpowers/sdd/billing/progress.md',
     },
     tasks: [],
     tasksDone: 0,
@@ -35,12 +35,12 @@ function workstream(overrides: Partial<Workstream> = {}): Workstream {
 }
 
 const TITLES = [
-  'Bilingual routes',
-  'Translation catalog',
-  'Language switcher',
-  'Glossary sync',
-  'hreflang and sitemap',
-  'Acceptance pass FR/EN',
+  'Invoice schema',
+  'Tax rules',
+  'Checkout endpoint',
+  'Webhook retries',
+  'Idempotency keys',
+  'Acceptance pass',
   'README',
 ]
 
@@ -61,10 +61,10 @@ function agent(state: AgentRow['state'], minutesAgo: number, terminalId: string 
 
 function view(overrides: Partial<WorkspaceView> = {}): WorkspaceView {
   return {
-    workspaceId: 'w-hq',
-    name: 'EROM-HQ',
+    workspaceId: 'w-api',
+    name: 'acme-api',
     branch: 'main',
-    root: '/work/erom-hq',
+    root: '/work/acme-api',
     workstreams: [workstream({ tasks: tasks(7, 3), tasksDone: 3, tasksTotal: 7 })],
     agents: [agent('working', 4)],
     needsYou: false,
@@ -72,25 +72,25 @@ function view(overrides: Partial<WorkspaceView> = {}): WorkspaceView {
   }
 }
 
-const network = view({
-  workspaceId: 'w-an',
-  name: 'agent-network',
-  branch: 'feat/v2',
-  root: '/work/agent-network',
-  workstreams: [workstream({ key: 'an:v2', label: 'network-v2', stage: 'review', tasks: tasks(5, 5, false), tasksDone: 5, tasksTotal: 5 })],
+const mobileApp = view({
+  workspaceId: 'w-app',
+  name: 'mobile-app',
+  branch: 'feat/offline',
+  root: '/work/mobile-app',
+  workstreams: [workstream({ key: 'app:offline', label: 'offline-sync', stage: 'review', tasks: tasks(5, 5, false), tasksDone: 5, tasksTotal: 5 })],
   agents: [agent('blocked', 2, 't2')],
   needsYou: true,
 })
-const lazaret = view({
-  workspaceId: 'w-laz',
-  name: 'lazaret',
+const docsSite = view({
+  workspaceId: 'w-docs',
+  name: 'docs-site',
   branch: 'dev',
-  root: '/work/lazaret',
-  workstreams: [workstream({ key: 'laz:spec', label: 'lazaret-spec', stage: 'spec', hasIntent: false, docs: {}, tasks: [] })],
+  root: '/work/docs-site',
+  workstreams: [workstream({ key: 'docs:spec', label: 'docs-site-spec', stage: 'spec', hasIntent: false, docs: {}, tasks: [] })],
   agents: [agent('working', 9, 't3')],
 })
 const resting = [
-  { workspaceId: 'r1', name: 'orca-plugin-stats', lastDoc: 'stats-dashboard', lastMovedAt: NOW - 9 * DAY },
+  { workspaceId: 'r1', name: 'acme-cli', lastDoc: 'cli-completions', lastMovedAt: NOW - 9 * DAY },
   { workspaceId: 'r2', name: 'old-experiment', lastDoc: 'tiny-spike', lastMovedAt: NOW - 31 * DAY },
 ]
 
@@ -111,18 +111,18 @@ const stub = (value: Snapshot) => ({ results, requests: { 'progress.snapshot': v
 
 export default defineCheck({
   empty: stub(snapshot([], { anySuperpowers: false })),
-  focused: stub(snapshot([view(), network, lazaret], { resting })),
+  focused: stub(snapshot([view(), mobileApp, docsSite], { resting })),
   focusedResting: stub(
-    snapshot([network, lazaret], {
+    snapshot([mobileApp, docsSite], {
       focusedWorkspaceId: 'w-idle',
-      focused: { workspaceId: 'w-idle', name: 'orca-plugin-stats', branch: 'main' },
+      focused: { workspaceId: 'w-idle', name: 'acme-cli', branch: 'main' },
       resting,
     }),
   ),
   needsYou: stub(
     snapshot([
       view({ agents: [agent('waiting', 7), agent('working', 3, 't9')], needsYou: true }),
-      network,
+      mobileApp,
     ]),
   ),
   multiple: stub(
@@ -130,10 +130,10 @@ export default defineCheck({
       view({
         workstreams: [
           workstream({ tasks: tasks(7, 3), tasksDone: 3, tasksTotal: 7 }),
-          workstream({ key: 'erom-hq:mail', label: 'mail-threading', stage: 'plan', tasks: [], lastMovedAt: NOW - 3 * DAY }),
+          workstream({ key: 'acme-api:search', label: 'search-filters', stage: 'plan', tasks: [], lastMovedAt: NOW - 3 * DAY }),
         ],
       }),
-      network,
+      mobileApp,
     ]),
   ),
   upstream: stub(
@@ -141,12 +141,12 @@ export default defineCheck({
       view({
         workstreams: [
           workstream({
-            key: 'erom-hq:upstream',
+            key: 'acme-api:upstream',
             label: 'upstream-sdd',
             stage: 'tasks',
             hasIntent: false,
             skippedStages: ['spec'],
-            docs: { plan: '/work/erom-hq/docs/superpowers/plans/p.md', ledger: '/work/erom-hq/.superpowers/sdd/up/progress.md' },
+            docs: { plan: '/work/acme-api/docs/superpowers/plans/p.md', ledger: '/work/acme-api/.superpowers/sdd/up/progress.md' },
             tasks: tasks(4, 1, false),
             tasksDone: 1,
             tasksTotal: 4,

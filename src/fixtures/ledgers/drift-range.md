@@ -1,4 +1,4 @@
-<!-- source: 2026-10-19-idema-p4-jalon1-navigateur.md, lines 1, 34-38 (excerpt, project prose replaced) -->
+<!-- source: observed ledger form, task ranges and rulings (excerpt, project prose replaced) -->
 # SDD ledger — plan: docs/superpowers/plans/2026-10-19-demo-browser.md
 
 Tasks 2-4: dispatched as one (sonnet/high, base main b842007, worktree .worktrees/demo)

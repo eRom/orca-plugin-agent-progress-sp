@@ -1,4 +1,4 @@
-<!-- source: 2026-09-29-agenthot-plan-3a-screens.md line 25; 2026-10-19-idema-p4-jalon1-navigateur.md line 46; 2026-10-20-idema-p4-jalon2-serveurs.md line 89; 2026-07-27-portail-revision-cca.md line 12; 2026-09-29-agenthot-plan-3b-assets-cinematic.md line 35 (one real line per word, project prose replaced) -->
+<!-- source: observed ledger form, one real line per in-progress word (excerpt, project prose replaced) -->
 # SDD ledger — plan: docs/superpowers/plans/2026-09-29-demo.md
 
 Task 1: implemented f21429f (167 pass, oracle diff empty, verified by controller); review dispatched (rev a4347917)

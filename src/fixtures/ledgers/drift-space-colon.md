@@ -1,4 +1,4 @@
-<!-- source: 2026-09-02-remote-control.md, lines 1, 92, 106, 107, 128 (excerpt, project prose replaced) -->
+<!-- source: observed ledger form, space before the colon (excerpt, project prose replaced) -->
 # SDD ledger — plan: docs/plans/2026-09-02-demo.md
 
 Task 1 : complete (no commit — worktree created from main, install + typecheck + tests green)

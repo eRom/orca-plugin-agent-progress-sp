@@ -108,12 +108,12 @@ test('reads the date at the start of a file name', () => {
 
 test('builds a label without date, `-design` suffix or extension', () => {
   assert.equal(docLabel('2026-11-17-suivi-superpowers-design.md'), 'suivi-superpowers')
-  assert.equal(docLabel('2026-09-16-lazaret-v0.md'), 'lazaret-v0')
+  assert.equal(docLabel('2026-09-16-docs-site-v0.md'), 'docs-site-v0')
   assert.equal(docLabel('notes.md'), 'notes')
 })
 
 test('finds the repo root before `/docs/superpowers/` or `/.superpowers/`', () => {
-  assert.equal(repoRootOf('/Users/x/dev/a/docs/superpowers/plans/p.md'), '/Users/x/dev/a')
-  assert.equal(repoRootOf('/Users/x/dev/a/.superpowers/sdd/p/progress.md'), '/Users/x/dev/a')
+  assert.equal(repoRootOf('/work/x/dev/a/docs/superpowers/plans/p.md'), '/work/x/dev/a')
+  assert.equal(repoRootOf('/work/x/dev/a/.superpowers/sdd/p/progress.md'), '/work/x/dev/a')
   assert.equal(repoRootOf('/tmp/p.md'), null)
 })

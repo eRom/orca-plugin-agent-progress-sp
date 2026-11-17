@@ -1,4 +1,4 @@
-<!-- source: ~/dev/EROM-HQ/.superpowers/sdd/progress.md, lines 1-9 (excerpt, project prose replaced) -->
+<!-- source: observed legacy ledger form without a plan header (excerpt, project prose replaced) -->
 # Session dédiée — progression SDD
 
 Plan: docs/superpowers/plans/2026-07-15-demo-session.md

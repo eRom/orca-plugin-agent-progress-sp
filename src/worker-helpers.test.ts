@@ -39,9 +39,9 @@ test('parseMemory answers an empty memory for anything that is not a plain objec
 })
 
 test('labelOf shows the project for a checkout named after its branch, else the name', () => {
-  assert.equal(labelOf({ name: 'main', project: 'EROM-HQ' }), 'EROM-HQ')
+  assert.equal(labelOf({ name: 'main', project: 'acme-api' }), 'acme-api')
   assert.equal(labelOf({ name: 'feat/v1', project: 'agent-progress-sp' }), 'agent-progress-sp')
   assert.equal(labelOf({ name: 'main', project: '  ' }), 'main')
   assert.equal(labelOf({ name: 'main', project: null }), 'main')
-  assert.equal(labelOf({ name: 'EROM-HQ', project: 'EROM-HQ' }), 'EROM-HQ')
+  assert.equal(labelOf({ name: 'acme-api', project: 'acme-api' }), 'acme-api')
 })

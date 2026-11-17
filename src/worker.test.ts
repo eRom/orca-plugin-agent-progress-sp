@@ -564,13 +564,13 @@ test('a worktree dropping out of workspace.list does not turn its ledger into a 
 test('labels a main checkout with its project name in the snapshot', async () => {
   const root = await tempRoot()
   await seedWorkspace(root)
-  const fixture: Fixture = { rows: [row('w1', root, { name: 'main', project: 'EROM-HQ', branch: 'main' })], context: context('w1'), agents: {} }
+  const fixture: Fixture = { rows: [row('w1', root, { name: 'main', project: 'acme-api', branch: 'main' })], context: context('w1'), agents: {} }
   const mounted = await mountProgress(makeHost(fixture))
   await mounted.progress.tick()
 
   const snapshot = await snapshotOf(mounted)
-  assert.equal(snapshot.live[0].name, 'EROM-HQ')
+  assert.equal(snapshot.live[0].name, 'acme-api')
   assert.equal(snapshot.live[0].branch, 'main')
-  assert.equal(snapshot.focused?.name, 'EROM-HQ')
+  assert.equal(snapshot.focused?.name, 'acme-api')
   await mounted.test.deactivate()
 })

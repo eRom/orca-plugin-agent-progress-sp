@@ -43,7 +43,7 @@ function sevenTasks(): TaskRow[] {
 function workspaceView(overrides: Partial<WorkspaceView> = {}): WorkspaceView {
   return {
     workspaceId: 'w1',
-    name: 'EROM-HQ',
+    name: 'acme-api',
     branch: 'main',
     root: '/work/hq',
     workstreams: [workstream()],
@@ -126,12 +126,12 @@ test('a snapshot without any Superpowers file draws the empty state', async () =
 test('the header shows the focused workspace and its branch', async () => {
   const { panel } = await mountWith(snapshot())
   assert.ok(panel.find({ type: 'Heading', text: 'Superpowers' }))
-  assert.ok(panel.find({ text: 'EROM-HQ · main' }))
+  assert.ok(panel.find({ text: 'acme-api · main' }))
   assertClean(panel)
 })
 
 test('the header shows the focused workspace even when it has no live work', async () => {
-  const other = workspaceView({ workspaceId: 'w2', name: 'lazaret', root: '/work/lazaret' })
+  const other = workspaceView({ workspaceId: 'w2', name: 'docs-site', root: '/work/docs-site' })
   const { panel } = await mountWith(
     snapshot({
       live: [other],
@@ -166,7 +166,7 @@ test('a workspace at the Tasks stage draws the strip, the progress and the task 
   assert.equal(panel.find({ type: 'Progress' })?.label, 'Tasks 3 of 7')
   const rows = rowsOf(panel, /^Tasks/)
   assert.equal(rows.length, 7)
-  assert.deepEqual(rows.map((row) => row.cells.status), ['Done', 'Done', 'Done', 'Fix 2/5', '–', '–', '–'])
+  assert.deepEqual(rows.map((row) => row.cells.status), ['Done', 'Done', 'Done', 'Fix 2/5', '·', '·', '·'])
   assertClean(panel)
 })
 
@@ -213,7 +213,7 @@ test('other workspaces with live work are counted in a collapsed section', async
   const live = [
     workspaceView(),
     workspaceView({ workspaceId: 'w2', name: 'agent-network', root: '/work/an', needsYou: true }),
-    workspaceView({ workspaceId: 'w3', name: 'lazaret', root: '/work/laz' }),
+    workspaceView({ workspaceId: 'w3', name: 'docs-site', root: '/work/docs-site' }),
   ]
   const { panel } = await mountWith(snapshot({ live }))
   const section = collapsibleTitled(panel, 'Other work in progress')
@@ -263,7 +263,7 @@ test('the other-work table puts the workspaces that need you first and reads eac
 
 test('a focused workspace without live work shows the table in the open, not in a Collapsible', async () => {
   const live = [
-    workspaceView({ workspaceId: 'w2', name: 'lazaret', root: '/work/laz' }),
+    workspaceView({ workspaceId: 'w2', name: 'docs-site', root: '/work/docs-site' }),
     workspaceView({ workspaceId: 'w3', name: 'agent-network', root: '/work/an', needsYou: true }),
   ]
   const { panel } = await mountWith(
@@ -277,7 +277,7 @@ test('a focused workspace without live work shows the table in the open, not in 
 })
 
 test('with no focus at all the table is shown in the open', async () => {
-  const live = [workspaceView({ workspaceId: 'w2', name: 'lazaret', root: '/work/laz' })]
+  const live = [workspaceView({ workspaceId: 'w2', name: 'docs-site', root: '/work/docs-site' })]
   const { panel } = await mountWith(snapshot({ live, focusedWorkspaceId: null, focused: null }))
   assert.equal(collapsibleTitled(panel, 'Other work in progress'), undefined)
   assert.equal(rowsOf(panel, /work in progress/i).length, 1)
@@ -285,7 +285,7 @@ test('with no focus at all the table is shown in the open', async () => {
 })
 
 test('activating a row of the table brings Orca to that workspace', async () => {
-  const live = [workspaceView(), workspaceView({ workspaceId: 'w2', name: 'lazaret', root: '/work/laz' })]
+  const live = [workspaceView(), workspaceView({ workspaceId: 'w2', name: 'docs-site', root: '/work/docs-site' })]
   const { panel, calls } = await mountWith(snapshot({ live }))
   await panel.toggle({ type: 'Collapsible', label: 'Other work in progress' })
   await panel.activateRow({ type: 'Table', label: /work in progress/i }, 'w2')
@@ -395,18 +395,18 @@ test('a changed snapshot moves the sheet to the new focused workspace', async ()
   const first = snapshot({ live: [workspaceView({ workstreams: [workstream({ stage: 'plan' })] })] })
   const { panel } = await mountWith(first)
   assert.ok(panel.find({ type: 'Badge', text: 'Plan' }))
-  assert.ok(panel.find({ text: 'EROM-HQ · main' }))
+  assert.ok(panel.find({ text: 'acme-api · main' }))
 
   const next = snapshot({
     live: [
-      workspaceView({ workspaceId: 'w2', name: 'lazaret', branch: 'dev', root: '/work/laz', workstreams: [workstream({ stage: 'review' })] }),
+      workspaceView({ workspaceId: 'w2', name: 'docs-site', branch: 'dev', root: '/work/docs-site', workstreams: [workstream({ stage: 'review' })] }),
     ],
     focusedWorkspaceId: 'w2',
   })
   await panel.post('progress.changed', next)
   assert.ok(panel.find({ type: 'Badge', text: 'Review' }))
   assert.equal(panel.find({ type: 'Badge', text: 'Plan' }), null)
-  assert.ok(panel.find({ text: 'lazaret · dev' }))
+  assert.ok(panel.find({ text: 'docs-site · dev' }))
   assertClean(panel)
 })
 
@@ -586,7 +586,7 @@ test('slow snapshot requests are retried without waiting for them, and stop for 
   view = panel
   await waitUntil(() => calls >= 3, 'a retry sent while the previous one is still unanswered')
   await panel.post('progress.changed', snapshot())
-  assert.ok(panel.find({ text: 'EROM-HQ · main' }), 'the pushed snapshot is shown, not the late stale reply')
+  assert.ok(panel.find({ text: 'acme-api · main' }), 'the pushed snapshot is shown, not the late stale reply')
   assert.equal(panel.find({ text: 'stale-reply' }), null)
   const callsAtSnapshot = calls
   await sleep(60)

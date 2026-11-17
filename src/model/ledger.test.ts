@@ -30,8 +30,8 @@ test('reads the upstream inline ledger', async () => {
 })
 
 test('reads bulleted tasks and counts exactly the one unknown line', async () => {
-  const ledger = await readFixture('erom-bullets.md')
-  assert.equal(ledger.planPath, '/Users/demo/project/docs/superpowers/plans/2026-11-16-demo-plugin.md')
+  const ledger = await readFixture('drift-bullets.md')
+  assert.equal(ledger.planPath, '/work/demo/docs/superpowers/plans/2026-11-16-demo-plugin.md')
   for (const number of ['1', '2', '3', '4', '5', '6']) {
     assert.deepEqual(ledger.tasks[number], { kind: 'done' }, `task ${number}`)
   }
@@ -40,7 +40,7 @@ test('reads bulleted tasks and counts exactly the one unknown line', async () =>
 })
 
 test('accepts a space before the colon', async () => {
-  const ledger = await readFixture('erom-space-colon.md')
+  const ledger = await readFixture('drift-space-colon.md')
   for (const number of ['1', '2', '5']) {
     assert.deepEqual(ledger.tasks[number], { kind: 'done' }, `task ${number}`)
   }
@@ -49,14 +49,14 @@ test('accepts a space before the colon', async () => {
 })
 
 test('a grouped line applies to every task it names and an unknown group line is counted', async () => {
-  const ledger = await readFixture('erom-groups.md')
+  const ledger = await readFixture('drift-groups.md')
   assert.deepEqual(ledger.tasks['3'], { kind: 'done' })
   assert.deepEqual(ledger.tasks['4'], { kind: 'done' })
   assert.equal(ledger.unparsedLines, 1)
 })
 
 test('expands a range and keeps in-progress from dispatched then review', async () => {
-  const ledger = await readFixture('erom-range.md')
+  const ledger = await readFixture('drift-range.md')
   for (const number of ['2', '3', '4']) {
     assert.deepEqual(ledger.tasks[number], { kind: 'in-progress' }, `task ${number}`)
   }
@@ -66,7 +66,7 @@ test('expands a range and keeps in-progress from dispatched then review', async 
 })
 
 test('maps implemented, implementer and re-review to in-progress, note and BASE to no effect', async () => {
-  const ledger = await readFixture('erom-in-progress.md')
+  const ledger = await readFixture('drift-in-progress.md')
   assert.deepEqual(ledger.tasks['1'], { kind: 'in-progress' })
   assert.deepEqual(ledger.tasks['2'], { kind: 'in-progress' })
   assert.deepEqual(ledger.tasks['3'], { kind: 'in-progress' })

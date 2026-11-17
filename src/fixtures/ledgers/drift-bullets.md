@@ -1,5 +1,5 @@
-<!-- source: 2026-11-16-jalon-2-plugin.md, lines 1, 26, 28, 30, 38, 51, 62, 90, 97, 99, 100 (excerpt, project prose replaced) -->
-# SDD ledger — plan: /Users/demo/project/docs/superpowers/plans/2026-11-16-demo-plugin.md
+<!-- source: observed ledger form, bulleted lines with a mix of tasks and notes (excerpt, project prose replaced) -->
+# SDD ledger — plan: /work/demo/docs/superpowers/plans/2026-11-16-demo-plugin.md
 
 ## Progress
 - Task 1: review (opus high) spec ✅; Important I-1 (symlink escapes the install root); Minor M-1
