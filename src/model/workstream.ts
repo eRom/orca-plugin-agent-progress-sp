@@ -1,4 +1,4 @@
-// Assemblage des chantiers : pur, sans import Node ni Orca. `now` est toujours passé par l'appelant.
+// Assemblage des workstreams : pur, sans import Node ni Orca. `now` est toujours passé par l'appelant.
 // Un chantier est une chaîne de documents reliés par des pointeurs explicites (ledger -> plan -> spec -> intent).
 
 import { docLabel, fileDate, parsePlanTasks, planSpecPointer, repoRootOf, specIntentPointer } from './docs'
@@ -14,7 +14,7 @@ export type TaskRow = {
   status: 'done' | 'todo' | 'in-progress' | 'fix'
   fix?: { round: number; max: number }
 }
-export type Chantier = {
+export type Workstream = {
   key: string
   label: string
   stage: Stage
@@ -34,7 +34,7 @@ export type Chantier = {
   live: boolean
 }
 export type LedgerMemoryEntry = { projectKey: string; total: number; done: number; lastSeenAt: number; goneAt?: number }
-/** Clé = `Chantier.key`. */
+/** Clé = `Workstream.key`. */
 export type LedgerMemory = Record<string, LedgerMemoryEntry>
 
 export const LIVE_WINDOW_MS = 604_800_000
@@ -366,7 +366,7 @@ function labelOf(instance: Instance): string {
   return instance.key
 }
 
-function toChantier(instance: Instance, memory: LedgerMemory, now: number): Chantier {
+function toWorkstream(instance: Instance, memory: LedgerMemory, now: number): Workstream {
   const recorded = instance.ledger ? undefined : memory[instance.key]
   const notes: string[] = []
   let summary: TaskSummary
@@ -393,7 +393,7 @@ function toChantier(instance: Instance, memory: LedgerMemory, now: number): Chan
   if (beyondSpec && instance.spec === null) skippedStages.push('spec')
   if ((stage === 'tasks' || stage === 'review' || stage === 'done') && instance.plan === null) skippedStages.push('plan')
 
-  const docs: Chantier['docs'] = {}
+  const docs: Workstream['docs'] = {}
   if (instance.intent) docs.intent = instance.intent.file.path
   if (instance.spec) docs.spec = instance.spec.file.path
   if (instance.plan) docs.plan = instance.plan.file.path
@@ -472,8 +472,8 @@ export function buildProject(input: {
   external: Record<string, DocFile>
   memory: LedgerMemory
   now: number
-}): { byWorkspace: Record<string, Chantier[]>; memory: LedgerMemory } {
-  const byWorkspace: Record<string, Chantier[]> = {}
+}): { byWorkspace: Record<string, Workstream[]>; memory: LedgerMemory } {
+  const byWorkspace: Record<string, Workstream[]> = {}
   for (const ws of input.workspaces) byWorkspace[ws.workspaceId] = []
 
   const projects = new Map<string, WorkspaceInput[]>()
@@ -489,12 +489,12 @@ export function buildProject(input: {
     const instances = buildInstances(ctx)
     memory = updateMemory(projectKey, instances, memory, input.now)
     for (const instance of instances) {
-      byWorkspace[instance.ws.workspaceId].push(toChantier(instance, memory, input.now))
+      byWorkspace[instance.ws.workspaceId].push(toWorkstream(instance, memory, input.now))
     }
   }
 
-  for (const chantiers of Object.values(byWorkspace)) {
-    chantiers.sort((a, b) => b.lastMovedAt - a.lastMovedAt || a.key.localeCompare(b.key))
+  for (const workstreams of Object.values(byWorkspace)) {
+    workstreams.sort((a, b) => b.lastMovedAt - a.lastMovedAt || a.key.localeCompare(b.key))
   }
   return { byWorkspace, memory }
 }
