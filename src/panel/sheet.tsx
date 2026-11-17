@@ -1,7 +1,7 @@
-// La fiche d'un chantier vivant du workspace actif : frise, progression, tâches, agents, documents, pied.
+// La fiche d'un projet : le chantier affiché (frise, progression, tâches), ses agents, ses documents, son pied.
 import { Badge, Button, IconButton, Progress, RelativeTime, Row, Select, Stack, Table, Text, read, update } from 'orca'
 import type { Workstream } from '../model/workstream'
-import type { WorkspaceView } from '../protocol'
+import type { ProjectAgent, ProjectView, ProjectWorkstream } from '../protocol'
 import { agentName, agentVerb, isUnderAnyRoot, needsUser, pluralize, stripOf, taskStatus } from './format'
 import { focusTerminal, openFile, workChoiceAtom } from './state'
 
@@ -12,9 +12,9 @@ const DOCUMENTS = [
   { key: 'ledger', label: 'Ledger' },
 ] as const
 
-/** Le chantier affiché : le choix gardé pour ce workspace s'il existe encore, sinon le plus récent. */
-export function chosenWorkstream(view: WorkspaceView, choice: Record<string, string>): Workstream {
-  return view.workstreams.find((item) => item.key === choice[view.workspaceId]) ?? view.workstreams[0]
+/** Le chantier affiché : le choix gardé pour ce projet s'il existe encore, sinon le chantier par défaut. */
+export function chosenWorkstream(view: ProjectView, choice: Record<string, string>): ProjectWorkstream {
+  return view.workstreams.find((item) => item.key === choice[view.projectKey]) ?? view.workstreams[0]
 }
 
 function Strip({ workstream }: { workstream: Workstream }) {
@@ -35,14 +35,16 @@ function Strip({ workstream }: { workstream: Workstream }) {
   )
 }
 
-function Agents({ view }: { view: WorkspaceView }) {
+/** Un agent dont le terminal n'est pas dans le workspace du chantier affiché dit où il se trouve. */
+function Agents({ agents, workspaceId }: { agents: readonly ProjectAgent[]; workspaceId: string }) {
   return (
     <Stack gap="xs">
-      {view.agents.map((agent, index) => (
+      {agents.map((agent, index) => (
         <Row key={agent.terminalId ?? `agent-${index}`} justify="between" align="center">
           <Text size="sm" tone={needsUser(agent) ? 'warning' : undefined}>
             {`${agentName(agent.agent)} ${agentVerb(agent.state)} `}
             <RelativeTime at={agent.since} format="duration" tone={needsUser(agent) ? 'warning' : undefined} />
+            {agent.workspaceId !== workspaceId ? ` · in ${agent.location}` : null}
           </Text>
           {agent.terminalId !== null ? (
             <IconButton
@@ -72,7 +74,7 @@ function Footer({ workstream }: { workstream: Workstream }) {
   )
 }
 
-export function Sheet({ view, localRoots, choice }: { view: WorkspaceView; localRoots: readonly string[]; choice: Record<string, string> }) {
+export function Sheet({ view, localRoots, choice }: { view: ProjectView; localRoots: readonly string[]; choice: Record<string, string> }) {
   const workstream = chosenWorkstream(view, choice)
   const documents = DOCUMENTS.flatMap((doc) => {
     const path = workstream.docs[doc.key]
@@ -85,7 +87,7 @@ export function Sheet({ view, localRoots, choice }: { view: WorkspaceView; local
           label="Work"
           value={workstream.key}
           options={view.workstreams.map((item) => ({ value: item.key, label: item.label }))}
-          onChange={(value) => update(workChoiceAtom, (previous) => ({ ...previous, [view.workspaceId]: value }))}
+          onChange={(value) => update(workChoiceAtom, (previous) => ({ ...previous, [view.projectKey]: value }))}
         />
       ) : null}
       <Strip workstream={workstream} />
@@ -107,11 +109,11 @@ export function Sheet({ view, localRoots, choice }: { view: WorkspaceView; local
           rows={workstream.tasks.map((task) => ({ key: task.id, cells: { id: task.id, title: task.title, status: taskStatus(task) } }))}
         />
       ) : null}
-      {view.agents.length > 0 ? <Agents view={view} /> : null}
+      {view.agents.length > 0 ? <Agents agents={view.agents} workspaceId={workstream.workspaceId} /> : null}
       {documents.length > 0 ? (
         <Row gap="xs" wrap>
           {documents.map((doc) => (
-            <Button key={doc.key} size="xs" variant="outline" icon="file-text" onPress={() => void openFile(view.workspaceId, doc.path)}>
+            <Button key={doc.key} size="xs" variant="outline" icon="file-text" onPress={() => void openFile(workstream.workspaceId, doc.path)}>
               {doc.label}
             </Button>
           ))}

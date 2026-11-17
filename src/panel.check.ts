@@ -1,16 +1,18 @@
 // Scénarios de `orca plugin check` et de `orca plugin shot --scenario` : le worker réel tourne sur le même hôte,
 // d'où `workspace.list` vide ; l'instantané que le panneau lit est celui de `progress.snapshot`.
 import { defineCheck } from 'orca/testing'
-import type { AgentRow, Snapshot, WorkspaceView } from './protocol'
-import type { TaskRow, Workstream } from './model/workstream'
+import type { ProjectAgent, ProjectView, ProjectWorkstream, Snapshot } from './protocol'
+import type { TaskRow } from './model/workstream'
 
 const NOW = Date.now()
 const MINUTE = 60_000
 const DAY = 86_400_000
 const results = { 'workspace.list': { workspaces: [], truncated: false } }
 
-function workstream(overrides: Partial<Workstream> = {}): Workstream {
+function workstream(overrides: Partial<ProjectWorkstream> = {}): ProjectWorkstream {
   return {
+    workspaceId: 'w-api',
+    branch: 'main',
     key: 'acme-api:billing',
     label: 'billing-v2',
     stage: 'tasks',
@@ -55,16 +57,14 @@ function tasks(count: number, done: number, fixing = true): TaskRow[] {
   })
 }
 
-function agent(state: AgentRow['state'], minutesAgo: number, terminalId: string | null = 't1'): AgentRow {
-  return { terminalId, agent: 'claude', state, since: NOW - minutesAgo * MINUTE }
+function agent(state: ProjectAgent['state'], minutesAgo: number, terminalId: string | null = 't1'): ProjectAgent {
+  return { terminalId, agent: 'claude', state, since: NOW - minutesAgo * MINUTE, workspaceId: 'w-api', location: 'main' }
 }
 
-function view(overrides: Partial<WorkspaceView> = {}): WorkspaceView {
+function view(overrides: Partial<ProjectView> = {}): ProjectView {
   return {
-    workspaceId: 'w-api',
+    projectKey: 'p-api',
     name: 'acme-api',
-    branch: 'main',
-    root: '/work/acme-api',
     workstreams: [workstream({ tasks: tasks(7, 3), tasksDone: 3, tasksTotal: 7 })],
     agents: [agent('working', 4)],
     needsYou: false,
@@ -73,36 +73,38 @@ function view(overrides: Partial<WorkspaceView> = {}): WorkspaceView {
 }
 
 const mobileApp = view({
-  workspaceId: 'w-app',
+  projectKey: 'p-app',
   name: 'mobile-app',
-  branch: 'feat/offline',
-  root: '/work/mobile-app',
-  workstreams: [workstream({ key: 'app:offline', label: 'offline-sync', stage: 'review', tasks: tasks(5, 5, false), tasksDone: 5, tasksTotal: 5 })],
-  agents: [agent('blocked', 2, 't2')],
+  workstreams: [
+    workstream({ key: 'app:offline', label: 'offline-sync', stage: 'review', tasks: tasks(5, 5, false), tasksDone: 5, tasksTotal: 5, workspaceId: 'w-app', branch: 'feat/offline' }),
+  ],
+  agents: [{ ...agent('blocked', 2, 't2'), workspaceId: 'w-app', location: 'feat/offline' }],
   needsYou: true,
 })
 const docsSite = view({
-  workspaceId: 'w-docs',
+  projectKey: 'p-docs',
   name: 'docs-site',
-  branch: 'dev',
-  root: '/work/docs-site',
-  workstreams: [workstream({ key: 'docs:spec', label: 'docs-site-spec', stage: 'spec', hasIntent: false, docs: {}, tasks: [] })],
-  agents: [agent('working', 9, 't3')],
+  workstreams: [
+    workstream({ key: 'docs:spec', label: 'docs-site-spec', stage: 'spec', hasIntent: false, docs: {}, tasks: [], workspaceId: 'w-docs', branch: 'dev' }),
+  ],
+  agents: [{ ...agent('working', 9, 't3'), workspaceId: 'w-docs', location: 'dev' }],
 })
 const resting = [
   { workspaceId: 'r1', name: 'acme-cli', lastDoc: 'cli-completions', lastMovedAt: NOW - 9 * DAY },
   { workspaceId: 'r2', name: 'old-experiment', lastDoc: 'tiny-spike', lastMovedAt: NOW - 31 * DAY },
 ]
 
-function snapshot(live: WorkspaceView[], overrides: Partial<Snapshot> = {}): Snapshot {
+// Le workspace actif est celui du premier projet (`w-api`) ; les racines sont celles des trois checkouts.
+function snapshot(live: ProjectView[], overrides: Partial<Snapshot> = {}): Snapshot {
   const focusedView = live[0]
   return {
-    focusedWorkspaceId: focusedView?.workspaceId ?? null,
-    focused: focusedView ? { workspaceId: focusedView.workspaceId, name: focusedView.name, branch: focusedView.branch } : null,
+    focusedWorkspaceId: focusedView ? 'w-api' : null,
+    focusedProjectKey: focusedView?.projectKey ?? null,
+    focused: focusedView ? { workspaceId: 'w-api', name: 'acme-api', branch: 'main' } : null,
     live,
     resting: [],
     anySuperpowers: live.length > 0,
-    localRoots: live.map((item) => item.root),
+    localRoots: ['/work/acme-api', '/work/mobile-app', '/work/docs-site'],
     ...overrides,
   }
 }
@@ -115,6 +117,7 @@ export default defineCheck({
   focusedResting: stub(
     snapshot([mobileApp, docsSite], {
       focusedWorkspaceId: 'w-idle',
+      focusedProjectKey: null,
       focused: { workspaceId: 'w-idle', name: 'acme-cli', branch: 'main' },
       resting,
     }),
@@ -162,6 +165,24 @@ export default defineCheck({
   review: stub(
     snapshot([
       view({ workstreams: [workstream({ stage: 'review', tasks: tasks(7, 7, false), tasksDone: 7, tasksTotal: 7 })] }),
+    ]),
+  ),
+  // Le cas des worktrees : le chantier exécuté vit dans le worktree, l'agent et une spec dans le checkout principal.
+  worktree: stub(
+    snapshot([
+      view({
+        workstreams: [
+          { ...workstream({ tasks: tasks(7, 2, false), tasksDone: 2, tasksTotal: 7 }), workspaceId: 'w-api-wt', branch: 'worktree-billing' },
+          {
+            ...workstream({ key: 'acme-api:export', label: 'export-pdf', stage: 'spec', hasIntent: false, docs: { spec: '/work/acme-api/docs/superpowers/specs/s.md' }, tasks: [], ledgerUpdatedAt: null }),
+            workspaceId: 'w-api',
+            branch: 'main',
+          },
+        ],
+        agents: [{ ...agent('waiting', 2), workspaceId: 'w-api', location: 'main' }],
+        needsYou: true,
+      }),
+      mobileApp,
     ]),
   ),
   longPlan: stub(

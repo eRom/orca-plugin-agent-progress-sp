@@ -1,6 +1,6 @@
 // Mise en forme pure du panneau : textes, frise, choix des documents ouvrables. Aucun composant, aucun état.
 import type { Stage, TaskRow, Workstream } from '../model/workstream'
-import type { AgentRow, WorkspaceView } from '../protocol'
+import type { AgentRow, ProjectView } from '../protocol'
 
 const STAGES: readonly { stage: Stage; label: string }[] = [
   { stage: 'intent', label: 'Intent' },
@@ -50,7 +50,7 @@ export function stageCell(workstream: Workstream): string {
   return `Task ${index === -1 ? workstream.tasksTotal : index + 1}/${workstream.tasksTotal}`
 }
 
-export function agentCell(view: WorkspaceView): string {
+export function agentCell(view: ProjectView): string {
   if (view.needsYou) return '● Needs you'
   return view.agents.some((agent) => agent.state === 'working') ? 'Working' : ''
 }
@@ -69,7 +69,7 @@ export function agentVerb(state: AgentRow['state']): string {
 export const needsUser = (agent: AgentRow): boolean => agent.state === 'blocked' || agent.state === 'waiting'
 
 /** Ceux qui attendent l'utilisateur d'abord, l'ordre d'origine ensuite (tri stable). */
-export const needsYouFirst = (views: readonly WorkspaceView[]): WorkspaceView[] =>
+export const needsYouFirst = (views: readonly ProjectView[]): ProjectView[] =>
   [...views].sort((a, b) => Number(b.needsYou) - Number(a.needsYou))
 
 const stripTrailingSlash = (root: string): string => (root.length > 1 ? root.replace(/\/+$/, '') : root)

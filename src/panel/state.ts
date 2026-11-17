@@ -4,7 +4,7 @@ import type { Snapshot } from '../protocol'
 
 /** Le dernier instantané reçu ; null tant que le worker n'a pas répondu. */
 export const snapshotAtom = atom<Snapshot | null>(null)
-/** Chantier choisi dans le sélecteur `Work`, par workspace. */
+/** Chantier choisi dans le sélecteur `Work`, par projet (clé `projectKey`). */
 export const workChoiceAtom = atom<Record<string, string>>({})
 /** Dernier échec d'une action ou de la lecture de l'instantané, à montrer à la personne. */
 export const noticeAtom = atom<string | null>(null)

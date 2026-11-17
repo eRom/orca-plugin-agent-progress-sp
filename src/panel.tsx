@@ -1,10 +1,10 @@
-// Panneau « Agent Progress » : la fiche du workspace actif d'abord, puis les autres chantiers et le repos.
+// Panneau « Agent Progress » : la fiche du projet actif d'abord, puis les autres projets et le repos.
 // Il ne lit que l'instantané du worker (`progress.snapshot`, puis `progress.changed`).
 import { EmptyState, Heading, Row, Spinner, Stack, Text, plugin, read, set, type PanelContext } from 'orca'
 import { AtRest, OtherWork, WorkTable } from './panel/others'
-import { Sheet } from './panel/sheet'
+import { Sheet, chosenWorkstream } from './panel/sheet'
 import { applySnapshot, noticeAtom, retryDelay, snapshotAtom, snapshotRetry, workChoiceAtom } from './panel/state'
-import type { Snapshot } from './protocol'
+import type { ProjectView, ProjectWorkstream, Snapshot } from './protocol'
 
 export function setup(ctx: PanelContext): void {
   ctx.subscriptions.push(plugin.on('progress.changed', applySnapshot))
@@ -30,14 +30,15 @@ export function setup(ctx: PanelContext): void {
   ctx.signal.addEventListener('abort', () => clearTimeout(timer), { once: true })
 }
 
-function Header({ snapshot }: { snapshot: Snapshot | null }) {
-  const focused = snapshot?.focused ?? null
+/** Avec une fiche : le projet et la branche du worktree qui porte le chantier affiché ; sans : le workspace actif. */
+function Header({ snapshot, card }: { snapshot: Snapshot | null; card?: { view: ProjectView; shown: ProjectWorkstream } }) {
+  const named = card ? { name: card.view.name, branch: card.shown.branch } : (snapshot?.focused ?? null)
   return (
     <Row justify="between" align="center">
       <Heading level={3}>Superpowers</Heading>
-      {focused ? (
+      {named ? (
         <Text muted size="sm" truncate>
-          {focused.branch ? `${focused.name} · ${focused.branch}` : focused.name}
+          {named.branch ? `${named.name} · ${named.branch}` : named.name}
         </Text>
       ) : null}
     </Row>
@@ -58,13 +59,14 @@ export default function Panel() {
     )
   }
 
-  const focusedView = snapshot.live.find((view) => view.workspaceId === snapshot.focusedWorkspaceId)
+  const focusedView = snapshot.live.find((view) => view.projectKey === snapshot.focusedProjectKey)
   const others = snapshot.live.filter((view) => view !== focusedView)
   const hasSheet = focusedView !== undefined
+  const card = hasSheet ? { view: focusedView, shown: chosenWorkstream(focusedView, choice) } : undefined
 
   return (
     <Stack gap="md">
-      <Header snapshot={snapshot} />
+      <Header snapshot={snapshot} card={card} />
       {notice !== null ? <Text tone="warning" size="sm">{notice}</Text> : null}
       {!snapshot.anySuperpowers ? (
         <EmptyState
