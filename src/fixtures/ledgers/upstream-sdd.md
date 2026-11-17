@@ -8,3 +8,4 @@ Task 2: complete (commits d4e5f6a..0a1b2c3, 1 parked)
 Task 3: Ruling: split the migration in two steps
 Task 3: fix round 1/5
 Task 3: fix round 2/5
+Task 2: no named agents to release

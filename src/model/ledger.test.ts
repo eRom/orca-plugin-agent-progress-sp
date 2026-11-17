@@ -147,3 +147,11 @@ test('handles Windows line endings', () => {
   assert.equal(ledger.planPath, 'x.md')
   assert.deepEqual(ledger.tasks['1'], { kind: 'done' })
 })
+
+test('"no named agents to release" is a known no-effect form, but other lines starting with "no" are not', () => {
+  const known = parseLedger('# SDD ledger - plan: p.md\n\nTask 4: no named agents to release\nTask 5: No named agents to release.\n')
+  assert.equal(known.unparsedLines, 0)
+  assert.deepEqual(known.tasks, {})
+  const other = parseLedger('# SDD ledger - plan: p.md\n\nTask 4: no idea what happened\nTask 5: no named agents\n')
+  assert.equal(other.unparsedLines, 2)
+})

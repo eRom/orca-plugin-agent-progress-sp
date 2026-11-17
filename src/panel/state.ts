@@ -33,3 +33,11 @@ export function applySnapshot(next: Snapshot): void {
   set(noticeAtom, null)
   set(snapshotAtom, next)
 }
+
+/** Rythme des relances du premier instantané : premier délai, plafond (modifiable pour les tests). */
+export const snapshotRetry = { firstMs: 2000, maxMs: 10_000 }
+
+/** Délai avant la relance numéro `attempt` (à partir de 0) : il double, plafonné. */
+export function retryDelay(attempt: number, timing: { firstMs: number; maxMs: number }): number {
+  return Math.min(timing.firstMs * 2 ** attempt, timing.maxMs)
+}

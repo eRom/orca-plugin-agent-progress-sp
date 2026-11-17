@@ -18,6 +18,8 @@ const HEADER = /^#\s*SDD ledger\s*[—–-]\s*plan:\s*(\S.*?)\s*$/
 // Puce optionnelle, `Task` ou `Tasks`, liste de numéros, deux-points avec ou sans espace avant.
 const TASK_LINE = /^\s*(?:-\s+)?Tasks?\s+(\d+[a-z]?(?:\s*[+,-]\s*\d+[a-z]?)*)\s*:\s*(.*)$/i
 const FIRST_WORD = /^([\p{L}][\p{L}\p{N}_-]*)/u
+// Forme upstream « Task N: no named agents to release » : connue, sans effet (on ne retient pas tout `no …`).
+const NO_AGENTS_TO_RELEASE = /^no\s+named\s+agents\s+to\s+release(?![\p{L}\p{N}_-])/iu
 const FIX_ROUND = /^fix\s+round\s+(\d+)\s*\/\s*(\d+)(?!\d)/i
 
 // Une plage plus longue que ça n'est pas une plage de tâches : on la refuse au lieu de l'étendre.
@@ -49,6 +51,7 @@ function expandNumbers(list: string): string[] | null {
 
 /** Effet d'une ligne de tâche : un état, « aucun effet », ou « non comprise » (null). */
 function readEffect(rest: string): TaskState | 'none' | null {
+  if (NO_AGENTS_TO_RELEASE.test(rest)) return 'none'
   const word = FIRST_WORD.exec(rest)?.[1].toLowerCase()
   if (word === undefined) return null
   if (word === 'complete') return { kind: 'done' }

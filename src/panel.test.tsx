@@ -2,6 +2,7 @@
 import { afterEach, assert, mockHost, mount, test, type TestPanel } from 'orca/testing'
 import type { TaskRow, Workstream } from './model/workstream'
 import * as panelModule from './panel'
+import { retryDelay, snapshotRetry } from './panel/state'
 import type { AgentRow, RestingView, Snapshot, WorkspaceView } from './protocol'
 
 let view: TestPanel | undefined
@@ -523,4 +524,92 @@ test('a failed document open leaves a notice that the next snapshot clears', asy
   await panel.post('progress.changed', first)
   assert.equal(panel.find({ text: 'Could not open this document.' }), null)
   assertClean(panel)
+})
+
+// Retries du premier instantané : les délais sont injectables, pas de vrais 2 s dans les tests.
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+async function waitUntil(done: () => boolean, label: string): Promise<void> {
+  for (let waited = 0; waited < 1000; waited += 5) {
+    if (done()) return
+    await sleep(5)
+  }
+  assert.fail(`timed out waiting for ${label}`)
+}
+const originalTiming = { ...snapshotRetry }
+afterEach(() => Object.assign(snapshotRetry, originalTiming))
+
+test('the retry delay doubles from the first delay and stays at the cap', () => {
+  const timing = { firstMs: 2000, maxMs: 10_000 }
+  assert.deepEqual([0, 1, 2, 3, 4, 5].map((attempt) => retryDelay(attempt, timing)), [2000, 4000, 8000, 10_000, 10_000, 10_000])
+})
+
+test('a first snapshot request that fails is retried until a snapshot arrives, without any progress.changed', async () => {
+  Object.assign(snapshotRetry, { firstMs: 5, maxMs: 10 })
+  let calls = 0
+  const host = mockHost({
+    requests: {
+      'progress.snapshot': () => {
+        calls += 1
+        if (calls === 1) throw new Error('awaiting approval')
+        return snapshot()
+      },
+    },
+  })
+  const panel = await mount(panelModule, { host })
+  view = panel
+  assert.ok(panel.find({ text: 'Could not read the work in progress.' }))
+  await waitUntil(() => calls >= 2, 'the second request')
+  await panel.settled()
+  assert.equal(panel.find({ text: 'Could not read the work in progress.' }), null, 'the next snapshot clears the notice')
+  assert.ok(panel.find({ type: 'Badge', text: 'Tasks' }))
+  await sleep(40)
+  assert.equal(calls, 2, 'no request is sent once a snapshot is applied')
+  assertClean(panel)
+})
+
+test('slow snapshot requests are retried without waiting for them, and stop for good once progress.changed lands', async () => {
+  Object.assign(snapshotRetry, { firstMs: 5, maxMs: 10 })
+  let calls = 0
+  const stale = snapshot({ focused: { workspaceId: 'w1', name: 'stale-reply', branch: null } })
+  const host = mockHost({
+    requests: {
+      'progress.snapshot': async () => {
+        calls += 1
+        // `mount` et `post` attendent les appels en cours : seul le premier échoue vite, les relances répondent tard.
+        if (calls === 1) throw new Error('awaiting approval')
+        await sleep(150)
+        return stale
+      },
+    },
+  })
+  const panel = await mount(panelModule, { host })
+  view = panel
+  await waitUntil(() => calls >= 3, 'a retry sent while the previous one is still unanswered')
+  await panel.post('progress.changed', snapshot())
+  assert.ok(panel.find({ text: 'EROM-HQ · main' }), 'the pushed snapshot is shown, not the late stale reply')
+  assert.equal(panel.find({ text: 'stale-reply' }), null)
+  const callsAtSnapshot = calls
+  await sleep(60)
+  assert.equal(calls, callsAtSnapshot, 'no request is sent after the snapshot was applied')
+  assertClean(panel)
+})
+
+test('closing the panel stops the snapshot retries', async () => {
+  Object.assign(snapshotRetry, { firstMs: 5, maxMs: 10 })
+  let calls = 0
+  const host = mockHost({
+    requests: {
+      'progress.snapshot': () => {
+        calls += 1
+        throw new Error('worker down')
+      },
+    },
+  })
+  const panel = await mount(panelModule, { host })
+  view = panel
+  await waitUntil(() => calls >= 2, 'a retry')
+  await panel.unmount()
+  const callsAtClose = calls
+  await sleep(60)
+  assert.equal(calls, callsAtClose, 'no request is sent after the panel is closed')
 })

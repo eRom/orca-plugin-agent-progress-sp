@@ -3,18 +3,31 @@
 import { EmptyState, Heading, Row, Spinner, Stack, Text, plugin, read, set, type PanelContext } from 'orca'
 import { AtRest, OtherWork, WorkTable } from './panel/others'
 import { Sheet } from './panel/sheet'
-import { applySnapshot, noticeAtom, snapshotAtom, workChoiceAtom } from './panel/state'
+import { applySnapshot, noticeAtom, retryDelay, snapshotAtom, snapshotRetry, workChoiceAtom } from './panel/state'
 import type { Snapshot } from './protocol'
 
 export function setup(ctx: PanelContext): void {
   ctx.subscriptions.push(plugin.on('progress.changed', applySnapshot))
-  plugin
-    .request('progress.snapshot')
-    .then((first) => {
-      // Un `progress.changed` arrivé pendant l'attente est plus récent que cette réponse.
-      if (read(snapshotAtom) === null) applySnapshot(first)
-    })
-    .catch(() => set(noticeAtom, 'Could not read the work in progress.'))
+  // Tant qu'aucun instantané n'est arrivé, on relance la demande : un panneau ouvert pendant que le worker
+  // attendait l'approbation restait sinon sur « Loading » pour toujours. La relance n'attend pas la fin
+  // de la demande précédente (une demande perdue ne répond jamais), et s'arrête dès qu'un instantané est là.
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const ask = (attempt: number): void => {
+    if (ctx.signal.aborted || read(snapshotAtom) !== null) return
+    plugin
+      .request('progress.snapshot', undefined, { signal: ctx.signal })
+      .then((first) => {
+        // Un `progress.changed` arrivé pendant l'attente est plus récent que cette réponse.
+        if (!ctx.signal.aborted && read(snapshotAtom) === null) applySnapshot(first)
+      })
+      .catch(() => {
+        // Un panneau fermé annule la demande : ce n'est pas un échec à montrer.
+        if (!ctx.signal.aborted && read(snapshotAtom) === null) set(noticeAtom, 'Could not read the work in progress.')
+      })
+    timer = setTimeout(() => ask(attempt + 1), retryDelay(attempt, snapshotRetry))
+  }
+  ask(0)
+  ctx.signal.addEventListener('abort', () => clearTimeout(timer), { once: true })
 }
 
 function Header({ snapshot }: { snapshot: Snapshot | null }) {
