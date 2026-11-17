@@ -68,7 +68,7 @@ function context(workspaceId: string, displayName = `Name ${workspaceId}`): NonN
 }
 
 /** Un hôte dont chaque réponse lit l'état du test au moment de l'appel. */
-function makeHost(fixture: Fixture, storage?: Record<string, never>) {
+function makeHost(fixture: Fixture, storage?: Record<string, never>, overrides: Record<string, unknown> = {}) {
   return mockHost({
     storage,
     results: {
@@ -80,6 +80,7 @@ function makeHost(fixture: Fixture, storage?: Record<string, never>) {
       'workspace.open': { opened: true },
       'terminal.focus': { focused: true },
       'commands.run': { ran: true },
+      ...overrides,
     },
   })
 }
@@ -189,7 +190,7 @@ test('survives a missing workspace.list and answers an empty snapshot', async ()
   await mounted.progress.tick()
 
   const snapshot = await snapshotOf(mounted)
-  assert.deepEqual(snapshot, { focusedWorkspaceId: null, focused: null, live: [], resting: [], anySuperpowers: false })
+  assert.deepEqual(snapshot, { focusedWorkspaceId: null, focused: null, live: [], resting: [], anySuperpowers: false, localRoots: [] })
   assert.ok(mounted.test.logs.length > 0, 'the failure is logged')
   await mounted.test.deactivate()
 })
@@ -359,4 +360,143 @@ test('the default export runs the first tick on demand and stops on deactivate',
   assert.equal(snapshot.live.length, 1)
   assert.deepEqual(worker.refusals, [])
   await worker.deactivate()
+})
+
+// ---------------------------------------------------------------------------------------------
+// Fix round 1
+// ---------------------------------------------------------------------------------------------
+
+test('drops a stale waiting agent when workspace.changed reports a closed terminal', async () => {
+  const root = await tempRoot()
+  await seedWorkspace(root)
+  const fixture: Fixture = {
+    rows: [row('w1', root)],
+    context: context('w1'),
+    agents: { w1: [{ terminalId: 't1', title: null, agent: 'claude', state: 'waiting', stateStartedAt: 5 }] },
+  }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+  assert.equal((await snapshotOf(mounted)).live[0].needsYou, true)
+  assert.equal(paramsOf(lastOf(statusUpdates(mounted.host))).tone, 'warning')
+
+  fixture.agents.w1 = []
+  await mounted.test.emit('workspace.changed', { context: context('w1') })
+
+  assert.equal((await snapshotOf(mounted)).live[0].needsYou, false)
+  assert.equal(paramsOf(lastOf(statusUpdates(mounted.host))).tone, 'neutral')
+  assert.deepEqual(mounted.test.refusals, [])
+  await mounted.test.deactivate()
+})
+
+test('relists every tracked workspace every ninth tick', async () => {
+  const root = await tempRoot()
+  await seedWorkspace(root)
+  const fixture: Fixture = {
+    rows: [row('w1', root)],
+    context: context('w1'),
+    agents: { w1: [{ terminalId: 't1', title: null, agent: 'claude', state: 'waiting', stateStartedAt: 5 }] },
+  }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+  fixture.agents.w1 = []
+  for (let index = 1; index < 9; index++) await mounted.progress.tick()
+  assert.equal((await snapshotOf(mounted)).live[0].needsYou, true, 'ticks 1 to 8 do not relist a tracked workspace')
+
+  await mounted.progress.tick()
+  assert.equal((await snapshotOf(mounted)).live[0].needsYou, false)
+  await mounted.test.deactivate()
+})
+
+test('opens a doc of another workspace of the same project with that workspace id', async () => {
+  const root1 = await tempRoot()
+  const root2 = await tempRoot()
+  await seedWorkspace(root1)
+  const fixture: Fixture = { rows: [row('w1', root1), row('w2', root2)], context: context('w2'), agents: {} }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+
+  const opened = await mounted.test.request('progress.openFile', { workspaceId: 'w2', path: join(root1, PLAN_REL) })
+  assert.deepEqual(opened, { opened: true })
+  assert.deepEqual(mounted.host.callsOf('editor.open').map(paramsOf), [{ workspaceId: 'w1', path: PLAN_REL }])
+  await mounted.test.deactivate()
+})
+
+test('prefers the requested workspace when several roots contain the path', async () => {
+  const outer = await tempRoot()
+  const inner = join(outer, 'nested')
+  await mkdir(inner, { recursive: true })
+  const fixture: Fixture = { rows: [row('outer', outer), row('inner', inner)], context: null, agents: {} }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+
+  await mounted.test.request('progress.openFile', { workspaceId: 'outer', path: join(inner, 'a.md') })
+  assert.deepEqual(mounted.host.callsOf('editor.open').map(paramsOf), [{ workspaceId: 'outer', path: 'nested/a.md' }])
+  await mounted.test.deactivate()
+})
+
+test('refuses a path under no local root, even for a listed ssh workspace', async () => {
+  const root = await tempRoot()
+  const fixture: Fixture = {
+    rows: [row('w1', root), row('remote', '/remote/box', { hostId: 'ssh:box', projectId: 'p2' })],
+    context: null,
+    agents: {},
+  }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+
+  assert.deepEqual(await mounted.test.request('progress.openFile', { workspaceId: 'remote', path: '/remote/box/docs/x.md' }), { opened: false })
+  assert.equal(mounted.host.callsOf('editor.open').length, 0)
+  assert.deepEqual((await snapshotOf(mounted)).localRoots, [root])
+  await mounted.test.deactivate()
+})
+
+test('does not post a snapshot from an event before the first tick has completed', async () => {
+  const root = await tempRoot()
+  await seedWorkspace(root)
+  const fixture: Fixture = { rows: [row('w1', root)], context: context('w1'), agents: {} }
+  let postsWhileListing = -1
+  let mounted: Mounted | undefined
+  const host = makeHost(fixture, undefined, {
+    // Le tour est encore en cours quand cette réponse arrive : l'événement a déjà été traité.
+    'workspace.list': async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      postsWhileListing = mounted?.test.posts.length ?? -1
+      return { workspaces: fixture.rows, truncated: false }
+    },
+  })
+  mounted = await mountProgress(host)
+  const firstTick = mounted.progress.tick()
+  await mounted.test.emit('workspace.changed', { context: context('w1') })
+  await firstTick
+
+  assert.equal(postsWhileListing, 0, 'no empty snapshot is posted while the first tick runs')
+  const posts = mounted.test.posts.map((post) => post.payload as Snapshot)
+  assert.ok(posts.length > 0)
+  assert.ok(posts.every((post) => post.live.length === 1), 'the first post already carries the workstream')
+  await mounted.test.deactivate()
+})
+
+test('never writes the memory until a read of it has succeeded, then keeps the stored entries', async () => {
+  const root = await tempRoot()
+  await seedWorkspace(root)
+  const fixture: Fixture = { rows: [row('w1', root)], context: context('w1'), agents: {} }
+  const stored = { 'p1:docs/superpowers/plans/gone.md': { projectKey: 'p1', total: 3, done: 3, lastSeenAt: 1, goneAt: Date.now() } }
+  let reads = 0
+  const host = makeHost(fixture, undefined, {
+    'storage.get': () => {
+      reads++
+      if (reads === 1) throw new Error('storage unavailable')
+      return { value: stored }
+    },
+  })
+  const mounted = await mountProgress(host)
+
+  await mounted.progress.tick()
+  assert.equal(memoryWrites(host).length, 0, 'a failed read must not be followed by a write')
+
+  await mounted.progress.tick()
+  assert.equal(memoryWrites(host).length, 1)
+  const written = JSON.stringify(memoryWrites(host)[0])
+  assert.ok(written.includes('gone.md') && written.includes('goneAt'), 'the stored goneAt entry is preserved')
+  await mounted.test.deactivate()
 })

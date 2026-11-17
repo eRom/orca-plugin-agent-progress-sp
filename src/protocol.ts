@@ -34,6 +34,8 @@ export type Snapshot = {
   resting: RestingView[]
   /** Au moins un workspace a des fichiers Superpowers. */
   anySuperpowers: boolean
+  /** Racines des workspaces locaux listés : le panneau n'affiche un bouton de document que sous l'une d'elles. */
+  localRoots: string[]
 }
 
 declare module 'orca' {

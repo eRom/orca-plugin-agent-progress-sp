@@ -64,5 +64,7 @@ export function assembleSnapshot(input: {
       }
     : null
 
-  return { focusedWorkspaceId: focused?.workspaceId ?? null, focused, live, resting, anySuperpowers }
+  const localRoots = [...new Set(input.workspaces.map((meta) => meta.root))].sort()
+
+  return { focusedWorkspaceId: focused?.workspaceId ?? null, focused, live, resting, anySuperpowers, localRoots }
 }

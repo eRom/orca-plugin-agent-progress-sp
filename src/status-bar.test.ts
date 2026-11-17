@@ -46,6 +46,7 @@ function snapshotOf(workstreams: Workstream[], options: { needsYou?: boolean; fo
     ],
     resting: [],
     anySuperpowers: true,
+    localRoots: ['/r'],
   }
 }
 

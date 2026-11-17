@@ -14,6 +14,7 @@ import type { AgentRow, Snapshot } from './protocol'
 import { createScanner } from './scan'
 import { assembleSnapshot, type FocusInfo, type WorkspaceMeta } from './snapshot'
 import { statusBarFor } from './status-bar'
+import { parseMemory, resolveOpenTarget } from './worker-helpers'
 
 export const TICK_MS = 3000
 /** `workspace.list` est relu au premier tour, puis tous les 9 tours (27 s : un nouveau workspace apparaît en moins de 30 s). */
@@ -39,40 +40,15 @@ const realSchedule: Schedule = (fn, ms) => {
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
-/** Chemin relatif au workspace, ou null s'il en sort (ou s'il n'en désigne aucun fichier). */
-function relativeToRoot(root: string, path: string): string | null {
-  const base = root.replace(/\/+$/, '')
-  const relative = path.startsWith('/') ? (path.startsWith(`${base}/`) ? path.slice(base.length + 1) : null) : path
-  if (relative === null || relative === '') return null
-  return relative.split('/').includes('..') ? null : relative
-}
-
-/** Lit la mémoire stockée ; une valeur qui n'a pas la forme attendue est ignorée plutôt que propagée. */
-function parseMemory(value: unknown): LedgerMemory {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
-  const memory: LedgerMemory = {}
-  for (const [key, entry] of Object.entries(value)) {
-    const candidate = entry as Partial<LedgerMemory[string]> | null
-    if (
-      candidate &&
-      typeof candidate.projectKey === 'string' &&
-      typeof candidate.total === 'number' &&
-      typeof candidate.done === 'number' &&
-      typeof candidate.lastSeenAt === 'number'
-    ) {
-      memory[key] = candidate as LedgerMemory[string]
-    }
-  }
-  return memory
-}
-
 export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {}): ProgressWorker {
   const scanner = deps.scanner ?? createScanner()
   const now = deps.now ?? Date.now
   const schedule = deps.schedule ?? realSchedule
 
-  let memory: LedgerMemory | null = null
+  let memory: LedgerMemory = {}
   let persistedMemory: LedgerMemory = {}
+  /** Vrai dès qu'une lecture du stockage a réussi ; l'écriture de la mémoire attend ce moment. */
+  let memoryRead = false
   let rows: ListedWorkspace[] = []
   let listDue = true
   let focus: FocusInfo | null = null
@@ -153,11 +129,14 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
     }
   }
 
-  /** Liste les agents des workspaces qui entrent dans la vue, oublie ceux qui en sortent. */
-  async function syncAgents(): Promise<void> {
+  /**
+   * Liste les agents des workspaces qui entrent dans la vue, oublie ceux qui en sortent, et relit ceux que `refresh` désigne.
+   * Orca n'émet aucun `agent.status.changed` quand un terminal est fermé : sans relecture, un agent `waiting` fantôme resterait.
+   */
+  async function syncAgents(refresh: (workspaceId: string) => boolean = () => false): Promise<void> {
     const needed = neededAgentWorkspaces()
     for (const id of [...agentsByWorkspace.keys()]) if (!needed.has(id)) agentsByWorkspace.delete(id)
-    await Promise.all([...needed].filter((id) => !agentsByWorkspace.has(id)).map(refreshAgents))
+    await Promise.all([...needed].filter((id) => !agentsByWorkspace.has(id) || refresh(id)).map(refreshAgents))
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -227,14 +206,15 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
 
   async function runTick(): Promise<void> {
     const startedAt = now()
-    if (memory === null) {
+    if (!memoryRead) {
+      // Tant que la lecture échoue on travaille sur une mémoire vide et on n'écrit rien : écrire effacerait les `goneAt` stockés.
       try {
         memory = parseMemory(await orca.storage.get(MEMORY_KEY))
+        persistedMemory = memory
+        memoryRead = true
       } catch (error) {
         log(`storage.get failed: ${messageOf(error)}`)
-        memory = {}
       }
-      persistedMemory = memory
     }
     if (!contextRead) await readInitialContext()
     if (listDue || tickCount % LIST_EVERY_TICKS === 0) await refreshList()
@@ -255,7 +235,7 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
       memory = built.memory
       projectResults.set(scan.projectKey, built.byWorkspace)
     }
-    if (!sameMemory(persistedMemory, memory)) {
+    if (memoryRead && !sameMemory(persistedMemory, memory)) {
       try {
         await orca.storage.set(MEMORY_KEY, memory)
         persistedMemory = memory
@@ -264,7 +244,8 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
       }
     }
 
-    await syncAgents()
+    // Toutes les 9 tours, les agents déjà suivis sont relus : un terminal fermé disparaît au plus tard après ~27 s.
+    await syncAgents(() => tickCount % LIST_EVERY_TICKS === 0)
     await publish()
 
     durations.push(now() - startedAt)
@@ -304,7 +285,11 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
         focus = focusOf(payload.context)
         focusFromEvent = true
         listDue = true
-        if (focus && rows.some((row) => row.id === focus?.workspaceId)) await syncAgents()
+        // Avant la fin du premier tour l'état est vide : le premier tour publie lui-même, un instantané vide ferait clignoter le panneau.
+        if (!hasTicked) return
+        // Ouverture, fermeture ou renommage d'un terminal : on relit les agents du workspace actif, même déjà suivi.
+        const focusedId = focus?.workspaceId
+        if (focusedId && rows.some((row) => row.id === focusedId)) await syncAgents((id) => id === focusedId)
         await publish()
       } catch (error) {
         log(`workspace.changed failed: ${messageOf(error)}`)
@@ -319,7 +304,7 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
         const workspaceId = payload.workspaceListId
         if (!workspaceId || !agentsByWorkspace.has(workspaceId)) return
         await refreshAgents(workspaceId)
-        await publish()
+        if (hasTicked) await publish()
       } catch (error) {
         log(`agent.status.changed failed: ${messageOf(error)}`)
       }
@@ -331,10 +316,9 @@ export function createProgressWorker(orca: OrcaWorkerApi, deps: ProgressDeps = {
     }),
 
     orca.panels.handle('progress.openFile', async ({ workspaceId, path }) => {
-      const row = rows.find((candidate) => candidate.id === workspaceId)
-      const relative = row ? relativeToRoot(row.path, path) : null
-      if (!row || relative === null) return { opened: false }
-      await orca.host.call('editor.open', { workspaceId, path: relative })
+      const target = resolveOpenTarget(rows, workspaceId, path)
+      if (!target) return { opened: false }
+      await orca.host.call('editor.open', target)
       return { opened: true }
     }),
 

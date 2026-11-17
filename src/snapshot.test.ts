@@ -45,7 +45,7 @@ test('splits workspaces into live, resting and absent', () => {
 
 test('says no superpowers when no workspace has a workstream', () => {
   const snapshot = assembleSnapshot({ focus: null, workspaces: [meta('a')], workstreams: { a: [] }, agents: {} })
-  assert.deepEqual(snapshot, { focusedWorkspaceId: null, focused: null, live: [], resting: [], anySuperpowers: false })
+  assert.deepEqual(snapshot, { focusedWorkspaceId: null, focused: null, live: [], resting: [], anySuperpowers: false, localRoots: ['/r/a'] })
 })
 
 test('keeps only live workstreams in a live workspace, most recent first', () => {
@@ -122,4 +122,14 @@ test('reports the focused workspace even without a live workstream, from the lis
     agents: {},
   })
   assert.deepEqual(unlisted.focused, { workspaceId: 'z', name: 'ctx name', branch: 'ctx-branch' })
+})
+
+test('lists the root of every given workspace as a local root, without duplicates', () => {
+  const snapshot = assembleSnapshot({
+    focus: null,
+    workspaces: [meta('a'), meta('b'), { ...meta('c'), root: '/r/a' }],
+    workstreams: {},
+    agents: {},
+  })
+  assert.deepEqual(snapshot.localRoots, ['/r/a', '/r/b'])
 })
