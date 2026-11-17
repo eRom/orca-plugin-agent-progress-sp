@@ -7,9 +7,9 @@ It reads the files Superpowers leaves in your workspaces (spec, plan, and the su
 ## What it shows
 
 - **The card of the current workspace**: a stage strip, the task list with its state, the documents (spec, plan, ledger) as buttons that open in an Orca tab, and the agent working there, with a button that brings its terminal to the front.
-- **Other work**: a row under the card counts the live work in your other workspaces and how many of them need you. Unfold it for a table; activating a row switches Orca to that workspace.
-- **At rest**: workspaces whose Superpowers files have not moved for 7 days, with their last document and its age.
-- **The status bar**: one item, shown only when the active workspace has live work. Text: the stage name, `Plan · N tasks`, or `Tasks k/N` (plus ` · fix a/b` when the current task is in a fix round). It turns to the warning tone when an agent of the workspace needs you.
+- **Other work**: a row under the card counts the other workspaces that have live work (workspaces, not pieces of work) and how many of them need you. Unfold it for a table; activating a row switches Orca to that workspace.
+- **At rest**: workspaces whose Superpowers files have not moved for 7 days, with their last document and its age. A workspace is left out when another workspace of the same project has live work (for example a main checkout whose plan runs in a worktree).
+- **The status bar**: one item, shown only when the active workspace has live work. Text: the stage name, `Plan · N tasks`, or `Tasks k/N`, where k is the current task (the first one not done) and N the number of tasks (plus ` · fix a/b` when the current task is in a fix round). It turns to the warning tone when an agent of the workspace needs you.
 
 A workspace with no Superpowers file appears nowhere.
 
@@ -33,7 +33,7 @@ Stages are computed on every re-read, in this order of priority:
 - **Done means the final review passed and the plan's ledger was removed, not that the branch was merged.** Superpowers deletes the ledger only at the end of a clean final review. If a ledger the plugin had seen disappears before all its tasks were recorded done, the card says so (for example `6 of 7 tasks recorded`), because real ledgers often miss the `complete` line of their last task.
 - **Intent** only appears when work has intent records (a non-standard workflow). Standard Superpowers work starts at Spec.
 - A piece of work that started further along (a plan without a spec) shows the missing earlier stages dimmed, without a check mark.
-- Done is remembered in the plugin's own storage, so it survives a restart of Orca. It only covers what happened since the plugin was installed: work finished earlier is shown at rest, never as Done.
+- Done is remembered in the plugin's own storage, so it survives a restart of Orca. It only covers what happened since the plugin was installed: work finished earlier is never shown as Done: with its ledger already gone, it appears at the Plan or Spec stage, stays live for 7 days counted from the date in its file name, then goes to rest.
 
 ### Live or at rest
 
