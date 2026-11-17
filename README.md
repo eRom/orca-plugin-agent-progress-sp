@@ -4,7 +4,7 @@
 
 **This plugin requires [Superpowers](https://github.com/obra/superpowers).** It shows where each Superpowers plan stands, and it has nothing to show in a workspace that has no Superpowers files. It requires Orca 1.4.259 or later and was tested on Orca 1.4.261 with Superpowers v7.0.2.
 
-It reads the files Superpowers leaves in your workspaces (spec, plan, and the subagent-driven-development ledger) and turns them into one card per piece of work: the stage, the tasks, the agent running there, and whether something is waiting for you. A status bar item follows the active workspace.
+It reads the files Superpowers leaves in your workspaces (spec, plan, and the subagent-driven-development ledger) and turns them into one card per project: the stage, the tasks, the agents of the project, and whether something is waiting for you. A status bar item follows the project of the active workspace.
 
 ## Install
 
@@ -14,14 +14,17 @@ From the command line:
 orca plugin install eRom/orca-plugin-agent-progress-sp
 ```
 
-Orca shows the access the plugin asks for (see [Access requested, and why](#access-requested-and-why)) and enables it once you approve. The **Agent Progress** panel then appears in the right sidebar, and the status bar item appears when the active workspace has live work.
+Orca shows the access the plugin asks for (see [Access requested, and why](#access-requested-and-why)) and enables it once you approve. The **Agent Progress** panel then appears in the right sidebar, and the status bar item appears when the project of the active workspace has live work.
+
+**Show the worktrees Superpowers creates.** In Claude Code, Superpowers puts its worktrees in `.claude/worktrees/`, which Orca hides by default. The plugin only reads the workspaces Orca lists, so the ledger of such a worktree stays out of sight and the work stays at the Plan stage in the main checkout. To show them, open Orca's settings, go to **Worktrees from other tools** and turn on **Claude Code**. Worktrees created elsewhere (for example `.worktrees/`, the fallback Superpowers uses with Codex) need an **Add folder…** entry with the absolute path of the folder that holds them, one per repository.
 
 ## What it shows
 
-- **The card of the current workspace**: a stage strip, the task list with its state, the documents (spec, plan, ledger) as buttons that open in an Orca tab, and the agent working there, with a button that brings its terminal to the front.
-- **Other work**: a row under the card counts the other workspaces that have live work (workspaces, not pieces of work) and how many of them need you. Unfold it for a table; activating a row switches Orca to that workspace.
+- **The card of the current project**: the project of the active workspace, main checkout and worktrees together. A stage strip, the task list with its state, the documents (spec, plan, ledger) as buttons that open in an Orca tab, and the agents of the project, each with a button that brings its terminal to the front. When the project has several live pieces of work, a **Work** menu switches between them, and the work whose ledger is open comes first.
+- **Agents and worktrees**: Orca attaches an agent to the workspace of its terminal. When Superpowers moves an agent into a worktree, its terminal stays in the main checkout, so the card lists the agents of every workspace of the project and names the workspace of a terminal that is not the one carrying the work, for example `Claude needs you for 2m · in main`.
+- **Other work**: a row under the card counts the other projects that have live work and how many of them need you. Unfold it for a table; activating a row switches Orca to the workspace that carries that project's work.
 - **At rest**: workspaces whose Superpowers files have not moved for 7 days, with their last document and its age. A workspace is left out when another workspace of the same project has live work (for example a main checkout whose plan runs in a worktree).
-- **The status bar**: one item, shown only when the active workspace has live work. Text: the stage name, `Plan · N tasks`, or `Tasks k/N`, where k is the current task (the first one not done) and N the number of tasks (plus ` · fix a/b` when the current task is in a fix round). It turns to the warning tone when an agent of the workspace needs you. The status bar `Tasks k/N` shows the current task, while the progress bar in the panel counts tasks done.
+- **The status bar**: one item, shown only when the project of the active workspace has live work. Text: the stage name, `Plan · N tasks`, or `Tasks k/N` for the work shown first on the card, where k is the current task (the first one not done) and N the number of tasks (plus ` · fix a/b` when the current task is in a fix round). It turns to the warning tone when an agent of the project needs you. The status bar `Tasks k/N` shows the current task, while the progress bar in the panel counts tasks done.
 
 A workspace with no Superpowers file appears nowhere.
 
