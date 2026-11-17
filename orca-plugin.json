@@ -7,25 +7,20 @@
   "author": { "name": "Romain Ecarnot", "url": "https://github.com/eRom" },
   "repository": "https://github.com/eRom/orca-plugin-agent-progress-sp",
   "engines": {
-    "orca": ">=1.4.246"
+    "orca": ">=1.4.259"
   },
   "execution": "trusted-worker",
   "pluginApi": 1,
   "main": "src/worker.ts",
   "contributes": {
-    "panels": [
-      {
-        "id": "agent-progress-sp",
-        "title": "Agent Progress for Superpowers",
-        "icon": "blocks",
-        "entry": "src/panel.tsx",
-        "ui": "components"
-      }
-    ]
+    "events": [{ "on": "workspace.changed" }, { "on": "agent.status.changed" }],
+    "statusBarItems": [{ "id": "progress", "icon": "layers", "command": "progress.toggle" }],
+    "commands": [{ "id": "progress.toggle", "title": "Agent Progress: Toggle the sidebar" }]
   },
   "capabilities": [
-    {
-      "kind": "storage:own"
-    }
+    { "kind": "workspace:read" },
+    { "kind": "agent:read" },
+    { "kind": "workspace:write" },
+    { "kind": "storage:own" }
   ]
 }
