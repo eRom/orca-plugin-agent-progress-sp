@@ -1,6 +1,6 @@
 # Agent Progress for Superpowers
 
-**This plugin requires [Superpowers](https://github.com/obra/superpowers).** It shows where each Superpowers plan stands, and it has nothing to show in a workspace that has no Superpowers files. Tested with Superpowers v7.0.2 and Orca 1.4.259 or later.
+**This plugin requires [Superpowers](https://github.com/obra/superpowers).** It shows where each Superpowers plan stands, and it has nothing to show in a workspace that has no Superpowers files. It requires Orca 1.4.259 or later and was tested on Orca 1.4.261 with Superpowers v7.0.2.
 
 It reads the files Superpowers leaves in your workspaces (spec, plan, and the subagent-driven-development ledger) and turns them into one card per piece of work: the stage, the tasks, the agent running there, and whether something is waiting for you. A status bar item follows the active workspace.
 
@@ -9,7 +9,7 @@ It reads the files Superpowers leaves in your workspaces (spec, plan, and the su
 - **The card of the current workspace**: a stage strip, the task list with its state, the documents (spec, plan, ledger) as buttons that open in an Orca tab, and the agent working there, with a button that brings its terminal to the front.
 - **Other work**: a row under the card counts the other workspaces that have live work (workspaces, not pieces of work) and how many of them need you. Unfold it for a table; activating a row switches Orca to that workspace.
 - **At rest**: workspaces whose Superpowers files have not moved for 7 days, with their last document and its age. A workspace is left out when another workspace of the same project has live work (for example a main checkout whose plan runs in a worktree).
-- **The status bar**: one item, shown only when the active workspace has live work. Text: the stage name, `Plan · N tasks`, or `Tasks k/N`, where k is the current task (the first one not done) and N the number of tasks (plus ` · fix a/b` when the current task is in a fix round). It turns to the warning tone when an agent of the workspace needs you.
+- **The status bar**: one item, shown only when the active workspace has live work. Text: the stage name, `Plan · N tasks`, or `Tasks k/N`, where k is the current task (the first one not done) and N the number of tasks (plus ` · fix a/b` when the current task is in a fix round). It turns to the warning tone when an agent of the workspace needs you. The status bar `Tasks k/N` shows the current task, while the progress bar in the panel counts tasks done.
 
 A workspace with no Superpowers file appears nowhere.
 

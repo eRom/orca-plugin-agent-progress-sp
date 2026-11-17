@@ -11,7 +11,7 @@ const STAGE_TEXT = { intent: 'Intent', spec: 'Spec', review: 'Review', done: 'Do
 function textOf(workstream: Workstream): string {
   switch (workstream.stage) {
     case 'plan':
-      return `Plan · ${workstream.tasksTotal} tasks`
+      return `Plan · ${workstream.tasksTotal} ${workstream.tasksTotal === 1 ? 'task' : 'tasks'}`
     case 'tasks': {
       // Tâche courante : la première qui n'est pas Done, comptée à partir de 1.
       const index = workstream.tasks.findIndex((task) => task.status !== 'done')

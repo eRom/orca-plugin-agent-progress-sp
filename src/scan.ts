@@ -17,7 +17,10 @@ export const nodeScanFs: ScanFs = {
 
 type CacheEntry = { mtimeMs: number; size: number; text: string }
 
-const DOC_KINDS = ['intents', 'specs', 'plans'] as const
+/** Taille maximale lue : 1 Mio. */
+const MAX_FILE_BYTES = 1_048_576
+
+const DOC_KINDS =['intents', 'specs', 'plans'] as const
 
 /** ENOENT, ou ENOTDIR quand un parent du chemin est un fichier : dans les deux cas, rien à lire. */
 function isNotFound(error: unknown): boolean {
@@ -49,7 +52,8 @@ export function createScanner(fs: ScanFs = nodeScanFs): {
       if (isNotFound(error)) return null
       throw error
     }
-    if (!info.isFile()) return null
+    // Un fichier trop gros n'est pas un document Superpowers (le plus gros observé : 98,6 Ko) : absent, jamais lu.
+    if (!info.isFile() || info.size > MAX_FILE_BYTES) return null
     const cached = cache.get(path)
     if (cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
       return { path, text: cached.text, mtimeMs: info.mtimeMs }
@@ -102,8 +106,13 @@ export function createScanner(fs: ScanFs = nodeScanFs): {
     async readExternal(paths) {
       const result: Record<string, DocFile> = {}
       for (const path of paths) {
-        const doc = await readDoc(path)
-        if (doc) result[path] = doc
+        // Un fichier désigné par un document ne doit jamais bloquer le projet : toute erreur de lecture vaut « absent ».
+        try {
+          const doc = await readDoc(path)
+          if (doc) result[path] = doc
+        } catch {
+          continue
+        }
       }
       return result
     },

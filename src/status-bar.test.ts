@@ -67,6 +67,11 @@ test('shows the task count at the plan stage', () => {
   assert.equal(bar.visible && bar.text, 'Plan · 7 tasks')
 })
 
+test('says "1 task" in the singular at the plan stage', () => {
+  const bar = statusBarFor(snapshotOf([workstream('plan', [task('1', 'todo')])]))
+  assert.equal(bar.visible && bar.text, 'Plan · 1 task')
+})
+
 test('shows the current task rank at the tasks stage', () => {
   const tasks = seven([task('1', 'done'), task('2', 'done'), task('3', 'done'), task('4', 'in-progress')])
   const bar = statusBarFor(snapshotOf([workstream('tasks', tasks)]))

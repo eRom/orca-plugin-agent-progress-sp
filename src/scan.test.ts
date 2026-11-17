@@ -1,5 +1,5 @@
 // Joue le scanner sur un dossier temporaire peuplé à la main, avec un ScanFs qui compte les lectures.
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, truncate, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assert, test } from 'orca/testing'
@@ -128,4 +128,73 @@ test('rejects when a directory cannot be read instead of returning empty lists',
   }
   assert.ok(failure instanceof Error)
   assert.ok((failure as Error).message.includes('EACCES'))
+})
+
+const MIB = 1_048_576
+
+test('readExternal omits a file whose stat or read throws instead of rejecting', async () => {
+  await withTempRoot(async (root) => {
+    const good = await put(root, 'elsewhere/good.md', 'fine')
+    const statDenied = join(root, 'elsewhere/stat-denied.md')
+    const readDenied = await put(root, 'elsewhere/read-denied.md', 'secret')
+    const fs: ScanFs = {
+      readdir: nodeScanFs.readdir,
+      stat: async (path) => {
+        if (path === statDenied) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+        return nodeScanFs.stat(path)
+      },
+      readFile: async (path, encoding) => {
+        if (path === readDenied) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+        return nodeScanFs.readFile(path, encoding)
+      },
+    }
+    const result = await createScanner(fs).readExternal([statDenied, readDenied, good])
+    assert.deepEqual(Object.keys(result), [good])
+  })
+})
+
+test('scanWorkspace rejects when an existing ledger cannot be stat-ed or read', async () => {
+  await withTempRoot(async (root) => {
+    const ledger = await put(root, '.superpowers/sdd/p/progress.md', 'ledger')
+    const denied = (failing: 'stat' | 'readFile'): ScanFs => ({
+      readdir: nodeScanFs.readdir,
+      stat: async (path) => {
+        if (failing === 'stat' && path === ledger) throw Object.assign(new Error('EACCES: stat denied'), { code: 'EACCES' })
+        return nodeScanFs.stat(path)
+      },
+      readFile: async (path, encoding) => {
+        if (failing === 'readFile' && path === ledger) throw Object.assign(new Error('EACCES: read denied'), { code: 'EACCES' })
+        return nodeScanFs.readFile(path, encoding)
+      },
+    })
+    for (const failing of ['stat', 'readFile'] as const) {
+      let failure: unknown = null
+      try {
+        await createScanner(denied(failing)).scanWorkspace(root)
+      } catch (error) {
+        failure = error
+      }
+      assert.ok(failure instanceof Error, `${failing} failure must reject`)
+      assert.ok((failure as Error).message.includes('EACCES'))
+    }
+  })
+})
+
+test('a file larger than 1 MiB is absent and never read; exactly 1 MiB is read', async () => {
+  await withTempRoot(async (root) => {
+    const big = await put(root, 'docs/superpowers/plans/big.md', '')
+    await truncate(big, MIB + 1)
+    const edge = await put(root, 'docs/superpowers/plans/edge.md', '')
+    await truncate(edge, MIB)
+    const bigExternal = await put(root, 'elsewhere/big.md', '')
+    await truncate(bigExternal, MIB + 1)
+    const { fs, reads } = countingFs()
+    const scanner = createScanner(fs)
+
+    const files = await scanner.scanWorkspace(root)
+    assert.deepEqual(paths(files.plans), [edge])
+    const external = await scanner.readExternal([bigExternal])
+    assert.deepEqual(external, {})
+    assert.ok(!reads.includes(big) && !reads.includes(bigExternal), 'oversized files must not be read')
+  })
 })

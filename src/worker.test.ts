@@ -500,3 +500,63 @@ test('never writes the memory until a read of it has succeeded, then keeps the s
   assert.ok(written.includes('gone.md') && written.includes('goneAt'), 'the stored goneAt entry is preserved')
   await mounted.test.deactivate()
 })
+
+test('reads a relative plan pointer that lives outside docs/superpowers and shows its real task count', async () => {
+  const root = await tempRoot()
+  const plan = `# Plan\n\n${Array.from({ length: 7 }, (_, index) => `### Task ${index + 1}: step ${index + 1}\n`).join('\n')}`
+  await put(root, 'docs/plans/x.md', plan)
+  await put(root, LEDGER_REL, '# SDD ledger — plan: docs/plans/x.md\nTask 1: complete (review clean)\n')
+  const fixture: Fixture = { rows: [row('w1', root)], context: context('w1'), agents: {} }
+  const mounted = await mountProgress(makeHost(fixture))
+  await mounted.progress.tick()
+
+  const workstream = (await snapshotOf(mounted)).live[0].workstreams[0]
+  assert.equal(workstream.tasksTotal, 7)
+  assert.equal(workstream.stage, 'tasks')
+  assert.deepEqual(workstream.notes, [])
+  await mounted.test.deactivate()
+})
+
+test('an unreadable linked file does not freeze the project: the rest is still scanned', async () => {
+  const root = await tempRoot()
+  await seedWorkspace(root, '/definitely/not/here/docs/superpowers/plans/other.md')
+  const denied = '/definitely/not/here/docs/superpowers/plans/other.md'
+  const fs: ScanFs = {
+    ...nodeScanFs,
+    stat: async (path) => {
+      if (path === denied) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+      return nodeScanFs.stat(path)
+    },
+  }
+  const fixture: Fixture = { rows: [row('w1', root)], context: context('w1'), agents: {} }
+  const mounted = await mountProgress(makeHost(fixture), { scanner: createScanner(fs) })
+  await mounted.progress.tick()
+
+  const workstream = (await snapshotOf(mounted)).live[0].workstreams[0]
+  assert.equal(workstream.stage, 'tasks')
+  assert.ok(mounted.test.logs.every((line) => !line.includes('scan failed')))
+  await mounted.test.deactivate()
+})
+
+test('a worktree dropping out of workspace.list does not turn its ledger into a Done in the main checkout', async () => {
+  const main = await tempRoot()
+  const worktree = await tempRoot()
+  await put(main, PLAN_REL, PLAN_TEXT)
+  await put(worktree, PLAN_REL, PLAN_TEXT)
+  await put(worktree, LEDGER_REL, `# SDD ledger — plan: ${PLAN_REL}\nTask 1: complete (review clean)\n`)
+  const fixture: Fixture = { rows: [row('w1', main), row('w2', worktree)], context: context('w1'), agents: {} }
+  const host = makeHost(fixture)
+  const mounted = await mountProgress(host)
+  await mounted.progress.tick()
+  assert.equal((await snapshotOf(mounted)).live.find((view) => view.workspaceId === 'w2')?.workstreams[0].stage, 'tasks')
+
+  // Le worktree sort de la liste (relue au prochain tour grâce à listDue) : son ledger n'est pas « disparu ».
+  fixture.rows = [row('w1', main)]
+  await mounted.test.emit('workspace.changed', { context: context('w1') })
+  await mounted.progress.tick()
+  const view = (await snapshotOf(mounted)).live.find((candidate) => candidate.workspaceId === 'w1')
+  assert.notEqual(view?.workstreams[0]?.stage, 'done')
+  const stored = host.data().storage[MEMORY_KEY] as Record<string, { goneAt?: number }>
+  assert.ok(Object.values(stored).every((entry) => entry.goneAt === undefined))
+  await mounted.test.deactivate()
+})

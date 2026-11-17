@@ -8,6 +8,7 @@ declare module 'node:fs/promises' {
   export function mkdir(path: string, options?: { recursive?: boolean }): Promise<string | undefined>
   export function mkdtemp(prefix: string): Promise<string>
   export function utimes(path: string, atime: number, mtime: number): Promise<void>
+  export function truncate(path: string, length: number): Promise<void>
   export function rm(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>
 }
 

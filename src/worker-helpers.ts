@@ -39,16 +39,22 @@ export function resolveOpenTarget(
 export function parseMemory(value: unknown): LedgerMemory {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
   const memory: LedgerMemory = {}
+  const finite = (field: unknown): field is number => typeof field === 'number' && Number.isFinite(field)
   for (const [key, entry] of Object.entries(value)) {
-    const candidate = entry as Partial<LedgerMemory[string]> | null
-    if (
-      candidate &&
-      typeof candidate.projectKey === 'string' &&
-      typeof candidate.total === 'number' &&
-      typeof candidate.done === 'number' &&
-      typeof candidate.lastSeenAt === 'number'
-    ) {
-      memory[key] = candidate as LedgerMemory[string]
+    if (typeof entry !== 'object' || entry === null) continue
+    const candidate = entry as Record<string, unknown>
+    if (typeof candidate.projectKey !== 'string' || !finite(candidate.total) || !finite(candidate.done) || !finite(candidate.lastSeenAt)) continue
+    // `goneAt` présent mais illisible : l'entrée est écartée, sinon un Done s'afficherait sur une date fausse.
+    if ('goneAt' in candidate && !finite(candidate.goneAt)) continue
+    // `workspaceId` est absent des entrées écrites avant ce champ : c'est permis.
+    if ('workspaceId' in candidate && typeof candidate.workspaceId !== 'string') continue
+    memory[key] = {
+      projectKey: candidate.projectKey,
+      total: candidate.total,
+      done: candidate.done,
+      lastSeenAt: candidate.lastSeenAt,
+      ...('goneAt' in candidate ? { goneAt: candidate.goneAt as number } : {}),
+      ...('workspaceId' in candidate ? { workspaceId: candidate.workspaceId as string } : {}),
     }
   }
   return memory

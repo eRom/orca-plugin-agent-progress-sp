@@ -156,7 +156,7 @@ test('a returning ledger clears goneAt and records the current counts', () => {
   const memory: LedgerMemory = { [key]: { projectKey: 'p1', total: 3, done: 2, lastSeenAt: now - 48 * HOUR, goneAt: now - 24 * HOUR } }
   const result = build([workspace('w1', '/r', { plans: [plan], ledgers: [ledger] })], memory)
   assert.equal(only(result.byWorkspace.w1).stage, 'tasks')
-  assert.deepEqual(result.memory[key], { projectKey: 'p1', total: 3, done: 1, lastSeenAt: now })
+  assert.deepEqual(result.memory[key], { projectKey: 'p1', total: 3, done: 1, lastSeenAt: now, workspaceId: 'w1' })
 })
 
 test('memory of another project is left untouched when its ledger is absent', () => {
@@ -353,4 +353,118 @@ test('sameMemory ignores lastSeenAt and sees every other difference', () => {
   assert.equal(sameMemory(base, { k: { projectKey: 'p1', total: 4, done: 2, lastSeenAt: 1 } }), false)
   assert.equal(sameMemory(base, {}), false)
   assert.equal(sameMemory({}, {}), true)
+})
+
+// ---------------------------------------------------------------------------------------------
+// Plan hors de docs/superpowers, jamais de Review sans plan
+// ---------------------------------------------------------------------------------------------
+
+function bigPlanText(): string {
+  return `# Big plan\n\n${Array.from({ length: 7 }, (_, index) => `### Task ${index + 1}: step ${index + 1}\n`).join('\n')}`
+}
+
+test('externalPointers returns a relative plan pointer inside the workspace but outside the scanned folders', () => {
+  const ledger = doc('/r/.superpowers/sdd/x/progress.md', ledgerText('docs/plans/x.md', ['Task 1: complete']))
+  assert.deepEqual(externalPointers(files({ ledgers: [ledger] }), ['/r'], {}), ['/r/docs/plans/x.md'])
+  assert.deepEqual(externalPointers(files({ ledgers: [ledger] }), ['/r'], { '/r/docs/plans/x.md': doc('/r/docs/plans/x.md', bigPlanText()) }), [])
+})
+
+test('externalPointers skips what the scan already covers, even when the file does not exist', () => {
+  const inScan = doc('/r/.superpowers/sdd/x/progress.md', ledgerText('docs/superpowers/plans/2026-11-01-y.md', ['Task 1: complete']))
+  assert.deepEqual(externalPointers(files({ ledgers: [inScan] }), ['/r'], {}), [])
+  const nested = doc('/r/.superpowers/sdd/x/progress.md', ledgerText('docs/superpowers/plans/archive/y.md', ['Task 1: complete']))
+  assert.deepEqual(externalPointers(files({ ledgers: [nested] }), ['/r'], {}), ['/r/docs/superpowers/plans/archive/y.md'])
+})
+
+test('a plan outside docs/superpowers but inside the workspace, read through external, gives the real tasks', () => {
+  const ledger = doc('/r/.superpowers/sdd/x/progress.md', ledgerText('docs/plans/x.md', ['Task 1: complete']), now - HOUR)
+  const external = { '/r/docs/plans/x.md': doc('/r/docs/plans/x.md', bigPlanText()) }
+  const workstream = only(build([workspace('w1', '/r', { ledgers: [ledger] })], {}, external).byWorkspace.w1)
+  assert.equal(workstream.tasksTotal, 7)
+  assert.equal(workstream.tasksDone, 1)
+  assert.equal(workstream.stage, 'tasks')
+  assert.equal(workstream.key, 'p1:docs/plans/x.md')
+  assert.equal(workstream.docs.plan, '/r/docs/plans/x.md')
+  assert.deepEqual(workstream.notes, [])
+})
+
+test('without a plan, a ledger whose named tasks are all done stays at the tasks stage', () => {
+  const ledger = doc('/r/.superpowers/sdd/x/progress.md', ledgerText('docs/plans/x.md', ['Task 1: complete']), now - HOUR)
+  const workstream = only(build([workspace('w1', '/r', { ledgers: [ledger] })]).byWorkspace.w1)
+  assert.equal(workstream.stage, 'tasks')
+  assert.equal(workstream.tasksTotal, 1)
+  assert.equal(workstream.tasksDone, 1)
+  assert.ok(workstream.notes.includes('plan not found'))
+})
+
+// ---------------------------------------------------------------------------------------------
+// Mémoire : le workspace qui portait le ledger, doublons de Done
+// ---------------------------------------------------------------------------------------------
+
+const KEY = `p1:${PLAN_REL}`
+const carried = (workspaceId: string, extra: Partial<LedgerMemory[string]> = {}): LedgerMemory => ({
+  [KEY]: { projectKey: 'p1', total: 3, done: 3, lastSeenAt: now - 24 * HOUR, workspaceId, ...extra },
+})
+
+test('the memory records the workspace that carries the ledger', () => {
+  const plan = doc(`/r2/${PLAN_REL}`, planText())
+  const ledger = doc(`/r2/${LEDGER_REL}`, ledgerText(PLAN_REL, ['Task 1: complete']), now - HOUR)
+  const result = build([workspace('w1', '/r1'), workspace('w2', '/r2', { plans: [plan], ledgers: [ledger] })])
+  assert.equal(result.memory[KEY].workspaceId, 'w2')
+})
+
+test('a ledger whose workspace dropped out of the input is not gone and the plan does not turn Done', () => {
+  const plan = doc(`/r1/${PLAN_REL}`, planText())
+  const result = build([workspace('w1', '/r1', { plans: [plan] })], carried('w2'))
+  assert.equal(result.memory[KEY].goneAt, undefined)
+  assert.equal(only(result.byWorkspace.w1).stage, 'plan')
+})
+
+test('a ledger gone from a scanned workspace is Done in the workspace that holds the plan', () => {
+  const plan = doc(`/r1/${PLAN_REL}`, planText())
+  const result = build([workspace('w1', '/r1', { plans: [plan] }), workspace('w2', '/r2')], carried('w2'))
+  assert.equal(result.memory[KEY].goneAt, now)
+  assert.equal(only(result.byWorkspace.w1).stage, 'done')
+  assert.equal(result.byWorkspace.w2.length, 0)
+})
+
+test('flagship flow: ledger trashed, then the worktree removed, Done stays in the main checkout on later ticks', () => {
+  const plan = doc(`/r1/${PLAN_REL}`, planText())
+  // Le ledger du worktree désigne le plan du checkout principal par un chemin absolu.
+  const ledger = doc(`/r2/${LEDGER_REL}`, ledgerText(`/r1/${PLAN_REL}`, ['Task 1: complete', 'Task 2: complete', 'Task 3: complete']), now - HOUR)
+  const w1 = workspace('w1', '/r1', { plans: [plan] })
+  // Tour 1 : le ledger vit dans le worktree.
+  const first = build([w1, workspace('w2', '/r2', { ledgers: [ledger] })])
+  assert.equal(first.memory[KEY].workspaceId, 'w2')
+  // Tour 2 : le ledger est mis à la corbeille.
+  const second = build([w1, workspace('w2', '/r2')], first.memory)
+  const goneAt = second.memory[KEY].goneAt
+  assert.equal(goneAt, now)
+  // Tour 3 : le worktree disparaît ; le Done reste dans le checkout principal, goneAt inchangé.
+  const later = buildProject({ workspaces: [w1], external: {}, memory: second.memory, now: now + HOUR })
+  assert.equal(later.memory[KEY].goneAt, goneAt)
+  assert.equal(only(later.byWorkspace.w1).stage, 'done')
+})
+
+test('a Done workstream shared by several workspaces is shown only in the one that last carried the ledger', () => {
+  const plan = (root: string) => doc(`${root}/${PLAN_REL}`, planText())
+  const workspaces = [workspace('w1', '/r1', { plans: [plan('/r1')] }), workspace('w2', '/r2', { plans: [plan('/r2')] })]
+  const result = build(workspaces, carried('w2'))
+  assert.equal(result.byWorkspace.w1.length, 0)
+  assert.equal(only(result.byWorkspace.w2).stage, 'done')
+})
+
+test('a Done workstream whose carrier is not listed is shown in the first workspace that holds the plan', () => {
+  const plan = (root: string) => doc(`${root}/${PLAN_REL}`, planText())
+  const workspaces = [workspace('w1', '/r1', { plans: [plan('/r1')] }), workspace('w2', '/r2', { plans: [plan('/r2')] })]
+  // L'entrée porte déjà goneAt : le workspace d'origine (w3) a disparu de la liste.
+  const result = build(workspaces, carried('w3', { goneAt: now - HOUR }))
+  assert.equal(only(result.byWorkspace.w1).stage, 'done')
+  assert.equal(result.byWorkspace.w2.length, 0)
+})
+
+test('sameMemory sees a change of carrier workspace', () => {
+  const base: LedgerMemory = { k: { projectKey: 'p1', total: 3, done: 2, lastSeenAt: 1, workspaceId: 'w1' } }
+  assert.equal(sameMemory(base, { k: { projectKey: 'p1', total: 3, done: 2, lastSeenAt: 1, workspaceId: 'w2' } }), false)
+  assert.equal(sameMemory(base, { k: { projectKey: 'p1', total: 3, done: 2, lastSeenAt: 9, workspaceId: 'w1' } }), true)
 })

@@ -33,7 +33,15 @@ export type Workstream = {
   ledgerUpdatedAt: number | null
   live: boolean
 }
-export type LedgerMemoryEntry = { projectKey: string; total: number; done: number; lastSeenAt: number; goneAt?: number }
+export type LedgerMemoryEntry = {
+  projectKey: string
+  total: number
+  done: number
+  lastSeenAt: number
+  goneAt?: number
+  /** Workspace qui portait le ledger au dernier tour où il a été vu ; absent des entrées écrites avant ce champ. */
+  workspaceId?: string
+}
 /** Clé = `Workstream.key`. */
 export type LedgerMemory = Record<string, LedgerMemoryEntry>
 
@@ -121,7 +129,8 @@ function resolvePointer(
     if (file) return { file, ws: owner }
   }
   const external = ctx.external[abs]
-  if (external) return { file: external, ws: null }
+  // Un fichier lu hors de l'index mais sous la racine d'un workspace garde une clé relative à cette racine.
+  if (external) return { file: external, ws: ownerOf(ctx, abs) }
   const name = baseName(abs)
   for (const folder of folders) {
     const file = ctx.index.get(home.workspaceId)?.get(`${DOC_DIR}/${folder}/${name}`)
@@ -155,13 +164,26 @@ function pointerOf(kind: PointerKind, text: string): string | null {
   return specIntentPointer(text)
 }
 
-function underAnyRoot(path: string, roots: readonly string[]): boolean {
-  return roots.some((root) => relativeTo(root, path) !== null)
+// Ce que le scanner lit déjà sous une racine : les .md directs de ces trois dossiers.
+const SCANNED_DOC = /^docs\/superpowers\/(?:intents|specs|plans)\/[^/]+\.md$/
+
+function coveredByScan(path: string, roots: readonly string[]): boolean {
+  return roots.some((root) => SCANNED_DOC.test(relativeTo(root, path) ?? ''))
+}
+
+/** Racine du projet la plus profonde qui contient ce chemin. */
+function deepestRoot(path: string, roots: readonly string[]): string | null {
+  let best: string | null = null
+  for (const root of roots) {
+    if (relativeTo(root, path) !== null && (best === null || root.length > best.length)) best = root
+  }
+  return best
 }
 
 /**
- * Chemins absolus situés hors de toutes les racines du projet que les ledgers, plans et specs désignent
- * (ceux du workspace, et ceux des documents externes déjà lus dans `known`), et qui ne sont pas encore connus.
+ * Chemins absolus que les ledgers, plans et specs désignent (ceux du workspace, et ceux des documents externes
+ * déjà lus dans `known`), que le scanner ne lit pas (hors des racines du projet, ou sous une racine mais hors de
+ * docs/superpowers/{intents,specs,plans}) et qui ne sont pas encore connus.
  * Le worker les lit, puis rappelle : le plan lu mène à sa spec, la spec à son intent.
  */
 export function externalPointers(
@@ -175,11 +197,12 @@ export function externalPointers(
     if (pointer === null) return
     let abs = pointer
     if (!pointer.startsWith('/')) {
-      const base = repoRootOf(doc.path)
+      // Même base que resolvePointer : la racine du workspace qui porte le document, sinon celle du dépôt.
+      const base = deepestRoot(doc.path, projectRoots) ?? repoRootOf(doc.path)
       if (base === null) return
-      abs = `${base}/${pointer}`
+      abs = `${stripTrailingSlash(base)}/${pointer}`
     }
-    if (underAnyRoot(abs, projectRoots) || abs in known || found.includes(abs)) return
+    if (coveredByScan(abs, projectRoots) || abs in known || found.includes(abs)) return
     found.push(abs)
   }
   for (const doc of files.ledgers) consider('ledger', doc)
@@ -375,10 +398,11 @@ function toWorkstream(instance: Instance, memory: LedgerMemory, now: number): Wo
 
   if (instance.ledger) {
     summary = summarizeTasks(instance)
-    stage = summary.total > 0 && summary.done === summary.total ? 'review' : 'tasks'
+    // Sans plan, le total n'est que ce que le ledger nomme : jamais de Review déduit d'un compte incomplet.
+    stage = instance.plan !== null && summary.total > 0 && summary.done === summary.total ? 'review' : 'tasks'
     unparsedLines = instance.ledger.read.unparsedLines
     if (instance.plan === null) notes.push('plan not found')
-  } else if (recorded) {
+  } else if (recorded?.goneAt !== undefined) {
     // Le ledger a disparu : on ne sait plus quelles tâches étaient Done, seulement combien.
     summary = { rows: [], done: recorded.done, total: recorded.total }
     stage = 'done'
@@ -440,25 +464,42 @@ export function sameMemory(a: LedgerMemory, b: LedgerMemory): boolean {
       left.projectKey === right.projectKey &&
       left.total === right.total &&
       left.done === right.done &&
-      left.goneAt === right.goneAt
+      left.goneAt === right.goneAt &&
+      left.workspaceId === right.workspaceId
     )
   })
 }
 
-/** Mémoire d'un projet après ce tour : ledgers vus, ledgers disparus, entrées périmées retirées. */
-function updateMemory(projectKey: string, instances: Instance[], memory: LedgerMemory, now: number): LedgerMemory {
+/**
+ * Mémoire d'un projet après ce tour : ledgers vus (avec le workspace qui les porte), ledgers disparus, entrées
+ * périmées retirées. Un ledger n'est « disparu » que si le workspace qui le portait a été lu ce tour-ci sans lui :
+ * un workspace absent de la liste (worktree supprimé) ne dit rien du ledger. Une entrée sans `workspaceId`
+ * (écrite avant ce champ) est disparue dès qu'aucun ledger ne la porte.
+ */
+function updateMemory(
+  projectKey: string,
+  instances: Instance[],
+  scanned: ReadonlySet<string>,
+  memory: LedgerMemory,
+  now: number,
+): LedgerMemory {
   const next: LedgerMemory = { ...memory }
-  const present = new Set<string>()
+  // Par clé, le ledger le plus récent désigne le workspace porteur.
+  const carriers = new Map<string, Instance>()
   for (const instance of instances) {
-    if (!instance.ledger || present.has(instance.key)) continue
-    present.add(instance.key)
+    if (!instance.ledger) continue
+    const current = carriers.get(instance.key)
+    if (!current || instance.ledger.file.mtimeMs > (current.ledger?.file.mtimeMs ?? 0)) carriers.set(instance.key, instance)
+  }
+  for (const [key, instance] of carriers) {
     const { done, total } = summarizeTasks(instance)
-    next[instance.key] = { projectKey, total, done, lastSeenAt: now }
+    next[key] = { projectKey, total, done, lastSeenAt: now, workspaceId: instance.ws.workspaceId }
   }
   for (const [key, entry] of Object.entries(memory)) {
-    if (entry.projectKey !== projectKey || present.has(key)) continue
-    if (entry.goneAt === undefined) next[key] = { ...entry, goneAt: now }
-    else if (now - entry.goneAt > MEMORY_RETENTION_MS) delete next[key]
+    if (entry.projectKey !== projectKey || carriers.has(key)) continue
+    if (entry.goneAt === undefined) {
+      if (entry.workspaceId === undefined || scanned.has(entry.workspaceId)) next[key] = { ...entry, goneAt: now }
+    } else if (now - entry.goneAt > MEMORY_RETENTION_MS) delete next[key]
   }
   return next
 }
@@ -487,8 +528,8 @@ export function buildProject(input: {
   for (const [projectKey, workspaces] of projects) {
     const ctx = buildContext(projectKey, workspaces, input.external)
     const instances = buildInstances(ctx)
-    memory = updateMemory(projectKey, instances, memory, input.now)
-    for (const instance of instances) {
+    memory = updateMemory(projectKey, instances, new Set(workspaces.map((ws) => ws.workspaceId)), memory, input.now)
+    for (const instance of withoutDuplicateDone(instances, memory)) {
       byWorkspace[instance.ws.workspaceId].push(toWorkstream(instance, memory, input.now))
     }
   }
@@ -497,4 +538,20 @@ export function buildProject(input: {
     workstreams.sort((a, b) => b.lastMovedAt - a.lastMovedAt || a.key.localeCompare(b.key))
   }
   return { byWorkspace, memory }
+}
+
+/**
+ * Un chantier Done se montre dans un seul workspace du projet : celui qui a porté le ledger en dernier s'il est
+ * listé parmi ceux qui détiennent le plan, sinon le premier qui le détient.
+ */
+function withoutDuplicateDone(instances: Instance[], memory: LedgerMemory): Instance[] {
+  const isDone = (instance: Instance): boolean => instance.ledger === null && memory[instance.key]?.goneAt !== undefined
+  const chosen = new Map<string, Instance>()
+  for (const instance of instances) {
+    if (!isDone(instance)) continue
+    const current = chosen.get(instance.key)
+    const carrier = memory[instance.key].workspaceId
+    if (!current || (instance.ws.workspaceId === carrier && current.ws.workspaceId !== carrier)) chosen.set(instance.key, instance)
+  }
+  return instances.filter((instance) => !isDone(instance) || chosen.get(instance.key) === instance)
 }
