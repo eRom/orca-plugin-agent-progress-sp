@@ -1,3 +1,7 @@
+.codegraph/
 _memory_/
 docs/superpowers/
+.orca/
+node_modules/
 .claude/
+.superpowers/
